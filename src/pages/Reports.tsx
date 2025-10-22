@@ -22,12 +22,10 @@ import {
 } from '@mui/material';
 import {
   TrendingUp,
-  TrendingDown,
   DollarSign,
   Users,
-  FileText,
-  Download,
   Calendar,
+  Download,
   Clock,
   CheckCircle,
 } from 'lucide-react';
@@ -43,17 +41,6 @@ interface PaymentData {
   due_date: string;
   payment_date?: string;
   status: 'paga' | 'em_aberto' | 'atrasada';
-}
-
-interface ReportsStats {
-  totalPayments: number;
-  paidPayments: number;
-  pendingPayments: number;
-  overduePayments: number;
-  totalAmount: number;
-  paidAmount: number;
-  pendingAmount: number;
-  overdueAmount: number;
 }
 
 interface MonthlyStats {
@@ -77,7 +64,6 @@ export function Reports() {
   const { user, isAdmin } = useAuth();
   const [payments, setPayments] = useState<PaymentData[]>([]);
   const [filteredPayments, setFilteredPayments] = useState<PaymentData[]>([]);
-  const [stats, setStats] = useState<ReportsStats | null>(null);
   const [monthlyStats, setMonthlyStats] = useState<MonthlyStats | null>(null);
   const [generalStats, setGeneralStats] = useState<GeneralStats | null>(null);
   const [groups, setGroups] = useState<{ id: string; name: string }[]>([]);
@@ -172,16 +158,6 @@ export function Reports() {
       if (groupIds.length === 0) {
         console.log('⚠️ Nenhum grupo encontrado');
         setPayments([]);
-        setStats({
-          totalPayments: 0,
-          paidPayments: 0,
-          pendingPayments: 0,
-          overduePayments: 0,
-          totalAmount: 0,
-          paidAmount: 0,
-          pendingAmount: 0,
-          overdueAmount: 0,
-        });
         setMonthlyStats({
           paidThisMonth: 0,
           paidThisMonthAmount: 0,
@@ -229,16 +205,6 @@ export function Reports() {
       if (studentIds.length === 0) {
         console.log('⚠️ Nenhum estudante encontrado nos grupos');
         setPayments([]);
-        setStats({
-          totalPayments: 0,
-          paidPayments: 0,
-          pendingPayments: 0,
-          overduePayments: 0,
-          totalAmount: 0,
-          paidAmount: 0,
-          pendingAmount: 0,
-          overdueAmount: 0,
-        });
         setMonthlyStats({
           paidThisMonth: 0,
           paidThisMonthAmount: 0,
@@ -274,16 +240,6 @@ export function Reports() {
       if (planIds.length === 0) {
         console.log('⚠️ Nenhum plano de pagamento encontrado');
         setPayments([]);
-        setStats({
-          totalPayments: 0,
-          paidPayments: 0,
-          pendingPayments: 0,
-          overduePayments: 0,
-          totalAmount: 0,
-          paidAmount: 0,
-          pendingAmount: 0,
-          overdueAmount: 0,
-        });
         setMonthlyStats({
           paidThisMonth: 0,
           paidThisMonthAmount: 0,
@@ -379,7 +335,6 @@ export function Reports() {
       };
 
       console.log('📈 Estatísticas calculadas:', statsData);
-      setStats(statsData);
 
       // Calcular estatísticas mensais
       const currentMonthPayments = paymentsData.filter(p => {
@@ -607,7 +562,7 @@ export function Reports() {
         Estatísticas Gerais
       </Typography>
       <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid item xs={12} sm={4}>
+        <Grid size={{ xs: 12, sm: 4 }}>
           <Card
             sx={{
               background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
@@ -632,7 +587,7 @@ export function Reports() {
           </Card>
         </Grid>
 
-        <Grid item xs={12} sm={4}>
+        <Grid size={{ xs: 12, sm: 4 }}>
           <Card
             sx={{
               background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
@@ -657,7 +612,7 @@ export function Reports() {
           </Card>
         </Grid>
 
-        <Grid item xs={12} sm={4}>
+        <Grid size={{ xs: 12, sm: 4 }}>
           <Card
             sx={{
               background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
@@ -688,7 +643,7 @@ export function Reports() {
         Estatísticas do Mês Corrente
       </Typography>
       <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid item xs={12} sm={4}>
+        <Grid size={{ xs: 12, sm: 4 }}>
           <Card
             onClick={() => handleCardClick('paid_this_month')}
             sx={{
@@ -721,7 +676,7 @@ export function Reports() {
           </Card>
         </Grid>
 
-        <Grid item xs={12} sm={4}>
+        <Grid size={{ xs: 12, sm: 4 }}>
           <Card
             onClick={() => handleCardClick('overdue_this_month')}
             sx={{
@@ -754,7 +709,7 @@ export function Reports() {
           </Card>
         </Grid>
 
-        <Grid item xs={12} sm={4}>
+        <Grid size={{ xs: 12, sm: 4 }}>
           <Card
             onClick={() => handleCardClick('expected_this_month')}
             sx={{
@@ -792,7 +747,7 @@ export function Reports() {
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <Grid container spacing={2} alignItems="center">
-            <Grid item xs={12} sm={4}>
+            <Grid size={{ xs: 12, sm: 4 }}>
               <FormControl fullWidth>
                 <InputLabel>Filtrar por Grupo</InputLabel>
                 <Select
@@ -809,7 +764,7 @@ export function Reports() {
                 </Select>
               </FormControl>
             </Grid>
-            <Grid item xs={12} sm={4}>
+            <Grid size={{ xs: 12, sm: 4 }}>
               <FormControl fullWidth>
                 <InputLabel>Filtrar por Status</InputLabel>
                 <Select
@@ -824,7 +779,7 @@ export function Reports() {
                 </Select>
               </FormControl>
             </Grid>
-            <Grid item xs={12} sm={4}>
+            <Grid size={{ xs: 12, sm: 4 }}>
               <Button
                 variant="contained"
                 startIcon={<Download />}

@@ -35,11 +35,7 @@ interface Group {
   }[];
 }
 
-interface GroupAdministrator {
-  id: string;
-  group_id: string;
-  administrator_id: string;
-}
+
 
 export default function Groups() {
   const [open, setOpen] = useState(false);

@@ -12,7 +12,6 @@ import {
 import {
   UsersRound,
   Users,
-  CreditCard,
   TrendingUp,
   Calendar,
   DollarSign,
@@ -27,6 +26,7 @@ interface DashboardStats {
   paymentsStats: {
     totalPaid: number;
     totalPending: number;
+    monthlyReceivable: number;
     totalAmount: number;
     paidAmount: number;
     paymentPercentage: number;
@@ -249,7 +249,7 @@ export function DashboardHome() {
 
       <Grid container spacing={3}>
         {/* Card de Grupos */}
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <Card
             sx={{
               background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
@@ -275,7 +275,7 @@ export function DashboardHome() {
         </Grid>
 
         {/* Card de Alunos */}
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <Card
             sx={{
               background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
@@ -301,7 +301,7 @@ export function DashboardHome() {
         </Grid>
 
         {/* Card de Pagamentos Efetuados */}
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <Card
             sx={{
               background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
@@ -327,7 +327,7 @@ export function DashboardHome() {
         </Grid>
 
         {/* Card de A Receber Mensal */}
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <Card
             sx={{
               background: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
@@ -353,7 +353,7 @@ export function DashboardHome() {
         </Grid>
 
         {/* Card de Percentual de Pagamentos */}
-        <Grid item xs={12} md={6}>
+        <Grid size={{ xs: 12, md: 6 }}>
           <Card sx={{ boxShadow: 3, height: '100%' }}>
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
@@ -396,7 +396,7 @@ export function DashboardHome() {
         </Grid>
 
         {/* Card de Alunos por Grupo */}
-        <Grid item xs={12} md={6}>
+        <Grid size={{ xs: 12, md: 6 }}>
           <Card sx={{ boxShadow: 3, height: '100%' }}>
             <CardContent>
               <Typography variant="h6" sx={{ fontWeight: 600, mb: 3 }}>

@@ -13,17 +13,14 @@ import {
   ListItemButton,
   ListItemIcon,
   ListItemText,
-  useTheme,
   Avatar,
 } from '@mui/material';
 import {
   Users,
-  UserPlus,
   UsersRound,
   FileSpreadsheet,
   CreditCard,
   Menu as MenuIcon,
-  ChevronLeft,
   LogOut,
   Home,
 } from 'lucide-react';
@@ -41,7 +38,6 @@ export function Dashboard() {
   const [open, setOpen] = useState(window.innerWidth >= 600);
   const [mobileOpen, setMobileOpen] = useState(false);
   const navigate = useNavigate();
-  const theme = useTheme();
   const { isAdmin, signOut } = useAuth();
 
   useEffect(() => {

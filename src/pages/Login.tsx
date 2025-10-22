@@ -6,7 +6,6 @@ import {
   Typography,
   Paper,
   Avatar,
-  Alert,
 } from '@mui/material';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';

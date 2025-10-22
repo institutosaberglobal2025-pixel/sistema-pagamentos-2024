@@ -23,7 +23,6 @@ import {
   DialogContent,
   DialogActions,
   Checkbox,
-  TextField,
   FormControlLabel,
   Chip,
 } from '@mui/material';
@@ -48,11 +47,6 @@ interface PaymentPlan {
   installment_value: number;
   start_date: string;
   end_date: string;
-}
-
-interface StudentPaymentPlan {
-  student_id: string;
-  payment_plan_id: string;
 }
 
 interface Installment {
@@ -394,33 +388,11 @@ export default function StudentPayments() {
     }
   };
 
-  const updateInstallment = async (installmentId: string, updates: Partial<Installment>) => {
-    try {
-      const { error } = await supabase
-        .from('installments')
-        .update(updates)
-        .eq('id', installmentId);
-
-      if (error) throw error;
-
-      setInstallments(prev => 
-        prev.map(inst => 
-          inst.id === installmentId ? { ...inst, ...updates } : inst
-        )
-      );
-      
-      showSnackbar('Parcela atualizada com sucesso!', 'success');
-    } catch (error) {
-      console.error('Erro ao atualizar parcela:', error);
-      showSnackbar('Erro ao atualizar parcela', 'error');
-    }
-  };
-
   const handleInstallmentStatusChange = (installmentId: string, paid: boolean) => {
     const currentDate = new Date().toISOString().split('T')[0];
     const updates: Partial<Installment> = {
       status: paid ? 'paga' : 'em_aberto',
-      payment_date: paid ? currentDate : null
+      payment_date: paid ? currentDate : undefined
     };
     
     // Update local state only (not database yet)

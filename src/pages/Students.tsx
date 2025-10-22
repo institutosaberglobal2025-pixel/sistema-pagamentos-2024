@@ -156,7 +156,7 @@ export function Students() {
 
     const formattedStudents = data?.map(student => ({
       ...student,
-      group_name: student.groups?.name
+      group_name: (student.groups as any)?.name || 'Sem grupo'
     })) || [];
 
     setStudents(formattedStudents);

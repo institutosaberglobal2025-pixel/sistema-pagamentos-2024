@@ -49,7 +49,7 @@ const createTables = async () => {
           and is_super_admin = true
         ));
     `
-    }).then(result => {
+    }).then((result: any) => {
       if (result.error) {
         throw new Error(`Erro ao criar tabela administrators: ${result.error.message}`);
       }
@@ -58,7 +58,7 @@ const createTables = async () => {
 
     // Criando tabela de grupos
     console.log('Criando tabela de grupos...');
-    await supabaseAdmin.rpc('exec_sql', {
+    await supabase.rpc('exec_sql', {
       query: `
       create table if not exists groups (
         id uuid primary key default gen_random_uuid(),
@@ -100,7 +100,7 @@ const createTables = async () => {
           where user_id = auth.uid()
         ));
     `
-    }).then(result => {
+    }).then((result: any) => {
       if (result.error) {
         throw new Error(`Erro ao criar tabela groups: ${result.error.message}`);
       }
@@ -109,7 +109,7 @@ const createTables = async () => {
 
     // Criando tabela de group_administrators
     console.log('Criando tabela de group_administrators...');
-    await supabaseAdmin.rpc('exec_sql', {
+    await supabase.rpc('exec_sql', {
       query: `
       create table if not exists group_administrators (
         id uuid primary key default gen_random_uuid(),
@@ -154,7 +154,7 @@ const createTables = async () => {
           where user_id = auth.uid()
         ));
     `
-    }).then(result => {
+    }).then((result: any) => {
       if (result.error) {
         throw new Error(`Erro ao criar tabela group_administrators: ${result.error.message}`);
       }
@@ -163,7 +163,7 @@ const createTables = async () => {
 
     // Criando tabela de alunos
     console.log('Criando tabela de alunos...');
-    await supabaseAdmin.rpc('exec_sql', {
+    await supabase.rpc('exec_sql', {
       query: `
       drop table if exists students;
       create table if not exists students (
@@ -203,7 +203,7 @@ const createTables = async () => {
           )
         );
     `
-    }).then(result => {
+    }).then((result: any) => {
       if (result.error) {
         throw new Error(`Erro ao criar tabela students: ${result.error.message}`);
       }
@@ -212,7 +212,7 @@ const createTables = async () => {
 
     // Criando tabela de planos de pagamento
     console.log('Criando tabela de planos de pagamento...');
-    await supabaseAdmin.rpc('exec_sql', {
+    await supabase.rpc('exec_sql', {
       query: `
       -- Adicionando coluna name à tabela payment_plans se ela não existir
       DO $$ 
@@ -266,7 +266,7 @@ const createTables = async () => {
           )
         );
     `
-    }).then(result => {
+    }).then((result: any) => {
       if (result.error) {
         throw new Error(`Erro ao criar tabela payment_plans: ${result.error.message}`);
       }
@@ -275,7 +275,7 @@ const createTables = async () => {
 
     // Criando tabela de parcelas
     console.log('Criando tabela de parcelas...');
-    await supabaseAdmin.rpc('exec_sql', {
+    await supabase.rpc('exec_sql', {
       query: `
       create table if not exists installments (
         id uuid primary key default gen_random_uuid(),
@@ -316,7 +316,7 @@ const createTables = async () => {
           )
         );
     `
-    }).then(result => {
+    }).then((result: any) => {
       if (result.error) {
         throw new Error(`Erro ao criar tabela installments: ${result.error.message}`);
       }

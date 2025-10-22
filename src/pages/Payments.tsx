@@ -15,7 +15,6 @@ import {
   TableHead,
   TableRow,
   Paper,
-  Divider,
   Dialog,
   DialogActions,
   DialogContent,
