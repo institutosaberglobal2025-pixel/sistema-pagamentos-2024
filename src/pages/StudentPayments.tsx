@@ -474,62 +474,121 @@ export default function StudentPayments() {
             {loading ? (
               <Typography>Carregando alunos...</Typography>
             ) : students.length > 0 ? (
-              <TableContainer component={Paper} sx={{ mt: 2 }}>
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell><strong>Nome</strong></TableCell>
-                      <TableCell><strong>Plano de Pagamento</strong></TableCell>
-                      <TableCell><strong>Ações</strong></TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {students.map((student) => (
-                      <TableRow key={student.id}>
-                        <TableCell>{student.name}</TableCell>
-                        <TableCell>
-                          <FormControl size="small" sx={{ minWidth: 200 }}>
-                            <Select
-                              value={studentPaymentPlans[student.id] || ''}
-                              onChange={(e) => handlePlanChange(student.id, e.target.value)}
-                              displayEmpty
-                            >
-                              <MenuItem value="">
-                                <em>Selecione um plano</em>
+              <>
+                {/* Layout Desktop - Tabela */}
+                <Box sx={{ display: { xs: 'none', md: 'block' } }}>
+                  <TableContainer component={Paper} sx={{ mt: 2 }}>
+                    <Table>
+                      <TableHead>
+                        <TableRow>
+                          <TableCell><strong>Nome</strong></TableCell>
+                          <TableCell><strong>Plano de Pagamento</strong></TableCell>
+                          <TableCell><strong>Ações</strong></TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {students.map((student) => (
+                          <TableRow key={student.id}>
+                            <TableCell>{student.name}</TableCell>
+                            <TableCell>
+                              <FormControl size="small" sx={{ minWidth: 200 }}>
+                                <Select
+                                  value={studentPaymentPlans[student.id] || ''}
+                                  onChange={(e) => handlePlanChange(student.id, e.target.value)}
+                                  displayEmpty
+                                >
+                                  <MenuItem value="">
+                                    <em>Selecione um plano</em>
+                                  </MenuItem>
+                                  {paymentPlans.map((plan) => (
+                                    <MenuItem key={plan.id} value={plan.id}>
+                                      {plan.name}
+                                    </MenuItem>
+                                  ))}
+                                </Select>
+                              </FormControl>
+                            </TableCell>
+                            <TableCell>
+                              <Box sx={{ display: 'flex', gap: 1 }}>
+                                <Button
+                                  variant="contained"
+                                  size="small"
+                                  onClick={() => saveStudentPlan(student.id)}
+                                  disabled={!studentPaymentPlans[student.id]}
+                                >
+                                  Salvar
+                                </Button>
+                                <Button
+                                  variant="outlined"
+                                  size="small"
+                                  onClick={() => openPaymentModal(student)}
+                                  disabled={!studentPaymentPlans[student.id]}
+                                >
+                                  Gerir Pagamentos
+                                </Button>
+                              </Box>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </Box>
+
+                {/* Layout Mobile - Cards */}
+                <Box sx={{ display: { xs: 'block', md: 'none' }, mt: 2 }}>
+                  {students.map((student) => (
+                    <Card key={student.id} sx={{ mb: 1.5, boxShadow: 1 }}>
+                      <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+                        <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 600, fontSize: '1.1rem' }}>
+                          {student.name}
+                        </Typography>
+                        
+                        <FormControl fullWidth size="small" sx={{ mb: 2 }}>
+                          <InputLabel id={`plan-select-${student.id}`}>Plano de Pagamento</InputLabel>
+                          <Select
+                            labelId={`plan-select-${student.id}`}
+                            value={studentPaymentPlans[student.id] || ''}
+                            label="Plano de Pagamento"
+                            onChange={(e) => handlePlanChange(student.id, e.target.value)}
+                            displayEmpty
+                          >
+                            <MenuItem value="">
+                              <em>Selecione um plano</em>
+                            </MenuItem>
+                            {paymentPlans.map((plan) => (
+                              <MenuItem key={plan.id} value={plan.id}>
+                                {plan.name}
                               </MenuItem>
-                              {paymentPlans.map((plan) => (
-                                <MenuItem key={plan.id} value={plan.id}>
-                                  {plan.name}
-                                </MenuItem>
-                              ))}
-                            </Select>
-                          </FormControl>
-                        </TableCell>
-                        <TableCell>
-                          <Box sx={{ display: 'flex', gap: 1 }}>
-                            <Button
-                              variant="contained"
-                              size="small"
-                              onClick={() => saveStudentPlan(student.id)}
-                              disabled={!studentPaymentPlans[student.id]}
-                            >
-                              Salvar
-                            </Button>
-                            <Button
-                              variant="outlined"
-                              size="small"
-                              onClick={() => openPaymentModal(student)}
-                              disabled={!studentPaymentPlans[student.id]}
-                            >
-                              Gerir Pagamentos
-                            </Button>
-                          </Box>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
+                            ))}
+                          </Select>
+                        </FormControl>
+
+                        <Box sx={{ display: 'flex', gap: 1 }}>
+                          <Button
+                            variant="contained"
+                            size="small"
+                            sx={{ flex: 1, py: 0.75 }}
+                            onClick={() => saveStudentPlan(student.id)}
+                            disabled={!studentPaymentPlans[student.id]}
+                          >
+                            Salvar
+                          </Button>
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            sx={{ flex: 1, py: 0.75 }}
+                            onClick={() => openPaymentModal(student)}
+                            disabled={!studentPaymentPlans[student.id]}
+                          >
+                            Gerir Pagamentos
+                          </Button>
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </Box>
+              </>
             ) : (
               <Typography color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
                 Nenhum aluno encontrado neste grupo
@@ -548,37 +607,132 @@ export default function StudentPayments() {
         }}
         maxWidth="md"
         fullWidth
+        sx={{
+          '& .MuiDialog-paper': {
+            margin: { xs: 0.5, sm: 2 },
+            width: { xs: 'calc(100vw - 8px)', sm: 'auto' },
+            maxWidth: { xs: 'calc(100vw - 8px)', sm: 'md' },
+            maxHeight: { xs: 'calc(100vh - 8px)', sm: 'auto' },
+            overflow: 'hidden'
+          }
+        }}
       >
-        <DialogTitle>
+        <DialogTitle sx={{ pb: 1, px: { xs: 1.5, sm: 3 } }}>
           Gerir Pagamentos - {selectedStudent?.name}
         </DialogTitle>
-        <DialogContent>
+        <DialogContent sx={{ px: { xs: 1, sm: 3 }, py: 1, overflow: 'hidden' }}>
           {modalLoading ? (
             <Typography>Carregando parcelas...</Typography>
           ) : installments.length > 0 ? (
-            <TableContainer component={Paper} sx={{ mt: 2 }}>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell><strong>Parcela</strong></TableCell>
-                    <TableCell><strong>Vencimento</strong></TableCell>
-                    <TableCell><strong>Valor</strong></TableCell>
-                    <TableCell><strong>Status</strong></TableCell>
-                    <TableCell><strong>Pago</strong></TableCell>
-                    <TableCell><strong>Data do Pagamento</strong></TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {installments.map((installment, index) => (
-                    <TableRow key={installment.id}>
-                      <TableCell>{index + 1}</TableCell>
-                      <TableCell>
-                        {new Date(installment.due_date).toLocaleDateString('pt-BR')}
-                      </TableCell>
-                      <TableCell>
-                        R$ {installment.value.toFixed(2)}
-                      </TableCell>
-                      <TableCell>
+            <>
+              {/* Layout Desktop - Tabela */}
+              <Box sx={{ display: { xs: 'none', md: 'block' } }}>
+                <TableContainer component={Paper} sx={{ mt: 2 }}>
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell><strong>Parcela</strong></TableCell>
+                        <TableCell><strong>Vencimento</strong></TableCell>
+                        <TableCell><strong>Valor</strong></TableCell>
+                        <TableCell><strong>Status</strong></TableCell>
+                        <TableCell><strong>Pago</strong></TableCell>
+                        <TableCell><strong>Data do Pagamento</strong></TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {installments.map((installment, index) => (
+                        <TableRow key={installment.id}>
+                          <TableCell>{index + 1}</TableCell>
+                          <TableCell>
+                            {new Date(installment.due_date).toLocaleDateString('pt-BR')}
+                          </TableCell>
+                          <TableCell>
+                            R$ {installment.value.toFixed(2)}
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              label={
+                                installment.status === 'paga' ? 'Paga' :
+                                installment.status === 'atrasada' ? 'Vencida' : 'A Vencer'
+                              }
+                              sx={{
+                                backgroundColor: 
+                                  installment.status === 'paga' ? '#4caf50' :
+                                  installment.status === 'atrasada' ? '#f44336' : '#ff9800',
+                                color: 'white',
+                                fontWeight: 'bold'
+                              }}
+                              size="small"
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <FormControlLabel
+                              control={
+                                <Checkbox
+                                  checked={installment.status === 'paga'}
+                                  onChange={(e) => 
+                                    handleInstallmentStatusChange(installment.id, e.target.checked)
+                                  }
+                                />
+                              }
+                              label=""
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                              <Typography variant="body2">
+                                {installment.payment_date 
+                                  ? new Date(installment.payment_date).toLocaleDateString('pt-BR')
+                                  : '-'
+                                }
+                              </Typography>
+                              {modifiedInstallments.has(installment.id) && (
+                                <Button
+                                  variant="contained"
+                                  size="small"
+                                  onClick={() => saveInstallmentPayment(installment.id)}
+                                  sx={{ 
+                                    minWidth: 'auto', 
+                                    px: 1
+                                  }}
+                                >
+                                  Salvar
+                                </Button>
+                              )}
+                            </Box>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Box>
+
+              {/* Layout Mobile - Cards */}
+              <Box sx={{ display: { xs: 'block', md: 'none' }, mt: 1, overflow: 'hidden' }}>
+                {installments.map((installment, index) => (
+                  <Card key={installment.id} sx={{ mb: 1, boxShadow: 1, overflow: 'hidden' }}>
+                    <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
+                      {/* Cabeçalho com parcela e status */}
+                      <Box sx={{ 
+                        display: 'flex', 
+                        justifyContent: 'space-between', 
+                        alignItems: 'center', 
+                        mb: 1,
+                        flexWrap: 'nowrap',
+                        overflow: 'hidden'
+                      }}>
+                        <Typography variant="subtitle2" sx={{ 
+                          fontWeight: 600,
+                          fontSize: '0.875rem',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          flex: 1,
+                          mr: 1
+                        }}>
+                          Parcela {index + 1}
+                        </Typography>
                         <Chip
                           label={
                             installment.status === 'paga' ? 'Paga' :
@@ -589,12 +743,92 @@ export default function StudentPayments() {
                               installment.status === 'paga' ? '#4caf50' :
                               installment.status === 'atrasada' ? '#f44336' : '#ff9800',
                             color: 'white',
-                            fontWeight: 'bold'
+                            fontWeight: 'bold',
+                            fontSize: '0.7rem',
+                            height: 20,
+                            flexShrink: 0
                           }}
                           size="small"
                         />
-                      </TableCell>
-                      <TableCell>
+                      </Box>
+                      
+                      {/* Layout vertical compacto para mobile */}
+                      <Box sx={{ mb: 1 }}>
+                        {/* Vencimento e Valor em linha */}
+                        <Box sx={{ 
+                          display: 'flex', 
+                          justifyContent: 'space-between', 
+                          alignItems: 'flex-start',
+                          mb: 0.5,
+                          gap: 1
+                        }}>
+                          <Box sx={{ flex: 1, minWidth: 0 }}>
+                            <Typography variant="caption" color="text.secondary" sx={{ 
+                              fontSize: '0.65rem',
+                              display: 'block',
+                              lineHeight: 1
+                            }}>
+                              Vencimento
+                            </Typography>
+                            <Typography variant="body2" sx={{ 
+                              fontWeight: 500, 
+                              fontSize: '0.8rem',
+                              lineHeight: 1.1,
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis'
+                            }}>
+                              {new Date(installment.due_date).toLocaleDateString('pt-BR')}
+                            </Typography>
+                          </Box>
+                          <Box sx={{ flex: 1, minWidth: 0, textAlign: 'right' }}>
+                            <Typography variant="caption" color="text.secondary" sx={{ 
+                              fontSize: '0.65rem',
+                              display: 'block',
+                              lineHeight: 1
+                            }}>
+                              Valor
+                            </Typography>
+                            <Typography variant="body2" sx={{ 
+                              fontWeight: 600, 
+                              fontSize: '0.8rem',
+                              lineHeight: 1.1,
+                              color: '#1976d2'
+                            }}>
+                              R$ {installment.value.toFixed(2)}
+                            </Typography>
+                          </Box>
+                        </Box>
+                        
+                        {/* Data de pagamento se existir */}
+                        {installment.payment_date && (
+                          <Box sx={{ mb: 0.5 }}>
+                            <Typography variant="caption" color="text.secondary" sx={{ 
+                              fontSize: '0.65rem',
+                              display: 'block',
+                              lineHeight: 1
+                            }}>
+                              Data do Pagamento
+                            </Typography>
+                            <Typography variant="body2" sx={{ 
+                              fontWeight: 500, 
+                              fontSize: '0.8rem',
+                              lineHeight: 1.1,
+                              color: '#4caf50'
+                            }}>
+                              {new Date(installment.payment_date).toLocaleDateString('pt-BR')}
+                            </Typography>
+                          </Box>
+                        )}
+                      </Box>
+
+                      {/* Checkbox e botão em layout responsivo */}
+                      <Box sx={{ 
+                        display: 'flex', 
+                        flexDirection: { xs: 'column', sm: 'row' },
+                        gap: 0.5,
+                        alignItems: { xs: 'stretch', sm: 'center' }
+                      }}>
                         <FormControlLabel
                           control={
                             <Checkbox
@@ -602,38 +836,45 @@ export default function StudentPayments() {
                               onChange={(e) => 
                                 handleInstallmentStatusChange(installment.id, e.target.checked)
                               }
+                              size="small"
+                              sx={{ p: 0.5 }}
                             />
                           }
-                          label=""
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                          <Typography variant="body2">
-                            {installment.payment_date 
-                              ? new Date(installment.payment_date).toLocaleDateString('pt-BR')
-                              : '-'
+                          label="Marcar como pago"
+                          sx={{ 
+                            margin: 0,
+                            flex: 1,
+                            '& .MuiFormControlLabel-label': {
+                              fontSize: '0.75rem',
+                              lineHeight: 1.2
                             }
-                          </Typography>
+                          }}
+                        />
+                        
+                        {modifiedInstallments.has(installment.id) && (
                           <Button
                             variant="contained"
                             size="small"
                             onClick={() => saveInstallmentPayment(installment.id)}
                             sx={{ 
-                              minWidth: 'auto', 
-                              px: 1,
-                              display: modifiedInstallments.has(installment.id) ? 'block' : 'none'
+                              minWidth: { xs: 'auto', sm: 60 },
+                              px: 1.5,
+                              py: 0.25,
+                              fontSize: '0.7rem',
+                              height: 28,
+                              alignSelf: { xs: 'flex-end', sm: 'center' },
+                              width: { xs: 'fit-content', sm: 'auto' }
                             }}
                           >
                             Salvar
                           </Button>
-                        </Box>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                        )}
+                      </Box>
+                    </CardContent>
+                  </Card>
+                ))}
+              </Box>
+            </>
           ) : (
             <Typography color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
               Nenhuma parcela encontrada para este aluno

@@ -51,6 +51,7 @@ export function Login() {
         justifyContent: 'center',
         bgcolor: 'background.default',
         p: 2,
+        pb: { xs: 6, sm: 2 }, // Espaçamento extra na parte inferior apenas no mobile
       }}
     >
       <Paper

@@ -270,6 +270,7 @@ export function Dashboard() {
         sx={{
           flexGrow: 1,
           p: { xs: 2, sm: 3 },
+          pb: { xs: 6, sm: 3 }, // Espaçamento extra na parte inferior apenas no mobile
           width: { xs: '100%', sm: `calc(100% - ${drawerWidth}px)` },
           bgcolor: 'background.default',
           mt: { xs: 8, sm: 0 },

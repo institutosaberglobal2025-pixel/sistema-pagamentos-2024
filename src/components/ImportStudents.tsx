@@ -15,7 +15,7 @@ import {
   Alert,
 } from '@mui/material';
 import { Upload } from 'lucide-react';
-import Papa from 'papaparse';
+import * as XLSX from 'xlsx';
 import { supabase } from '../config/supabase';
 
 interface ImportStudentsProps {
@@ -51,15 +51,32 @@ export default function ImportStudents({ groups, onImportComplete }: ImportStude
   };
 
   const downloadTemplate = () => {
-    const csvContent = 'Nome,Email,Telefone\n' +
-      'João Silva,joao.silva@email.com,(11) 98765-4321\n' +
-      'Maria Santos,maria.santos@email.com,(21) 99876-5432\n' +
-      'Pedro Oliveira,pedro.oliveira@email.com,(31) 97654-3210\n';
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = 'template_alunos.csv';
-    link.click();
+    // Criar workbook e worksheet
+    const wb = XLSX.utils.book_new();
+    
+    // Dados do template
+    const templateData = [
+      ['Nome', 'Email', 'Telefone'],
+      ['João Silva', 'joao.silva@email.com', '(11) 98765-4321'],
+      ['Maria Santos', 'maria.santos@email.com', '(21) 99876-5432'],
+      ['Pedro Oliveira', 'pedro.oliveira@email.com', '(31) 97654-3210']
+    ];
+    
+    // Criar worksheet
+    const ws = XLSX.utils.aoa_to_sheet(templateData);
+    
+    // Definir larguras das colunas
+    ws['!cols'] = [
+      { wch: 20 }, // Nome
+      { wch: 30 }, // Email
+      { wch: 18 }  // Telefone
+    ];
+    
+    // Adicionar worksheet ao workbook
+    XLSX.utils.book_append_sheet(wb, ws, 'Alunos');
+    
+    // Fazer download
+    XLSX.writeFile(wb, 'template_alunos.xlsx');
   };
 
   const validateStudentData = (student: Student, index: number) => {
@@ -81,46 +98,77 @@ export default function ImportStudents({ groups, onImportComplete }: ImportStude
     // Reseta o estado antes de processar novo arquivo
     setParsedStudents([]);
 
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: 'greedy',
-      encoding: 'UTF-8',
-      complete: (results) => {
-        // Verifica se as colunas necessárias existem
-        if (!results.meta.fields?.includes('Nome')) {
-          setSnackbarMessage('Arquivo CSV inválido. A coluna "Nome" é obrigatória.');
+    // Verificar se é arquivo Excel
+    if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls')) {
+      setSnackbarMessage('Por favor, selecione um arquivo Excel (.xlsx ou .xls).');
+      setSnackbarSeverity('error');
+      setSnackbarOpen(true);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+        
+        // Pegar a primeira planilha
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        
+        // Converter para JSON
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+        
+        if (jsonData.length === 0) {
+          setSnackbarMessage('Planilha vazia ou sem dados.');
           setSnackbarSeverity('error');
           setSnackbarOpen(true);
           return;
         }
 
-        const students = results.data
+        // Primeira linha deve ser o cabeçalho
+        const headers = jsonData[0] as string[];
+        const nomeIndex = headers.findIndex(h => h && h.toLowerCase().includes('nome'));
+        const emailIndex = headers.findIndex(h => h && h.toLowerCase().includes('email'));
+        const telefoneIndex = headers.findIndex(h => h && (h.toLowerCase().includes('telefone') || h.toLowerCase().includes('phone')));
+
+        if (nomeIndex === -1) {
+          setSnackbarMessage('Planilha inválida. A coluna "Nome" é obrigatória.');
+          setSnackbarSeverity('error');
+          setSnackbarOpen(true);
+          return;
+        }
+
+        // Processar dados (pular cabeçalho)
+        const students = jsonData
+          .slice(1)
           .map((row: any) => ({
-            name: (row['Nome'] || '').trim(),
-            email: (row['Email'] || '').trim(),
-            phone: (row['Telefone'] || '').trim(),
+            name: row[nomeIndex] ? String(row[nomeIndex]).trim() : '',
+            email: emailIndex !== -1 && row[emailIndex] ? String(row[emailIndex]).trim() : '',
+            phone: telefoneIndex !== -1 && row[telefoneIndex] ? String(row[telefoneIndex]).trim() : '',
           }))
           .filter(student => student.name || student.email || student.phone); // Remove linhas totalmente vazias
 
         if (students.length === 0) {
-          setSnackbarMessage('Nenhum aluno encontrado no arquivo CSV.');
+          setSnackbarMessage('Nenhum aluno encontrado na planilha.');
           setSnackbarSeverity('error');
           setSnackbarOpen(true);
           return;
         }
 
         setParsedStudents(students);
-        setSnackbarMessage(`${students.length} alunos encontrados no arquivo.`);
+        setSnackbarMessage(`${students.length} alunos encontrados na planilha.`);
         setSnackbarSeverity('success');
         setSnackbarOpen(true);
-      },
-      error: (error) => {
+      } catch (error) {
         console.error('Erro ao processar arquivo:', error);
-        setSnackbarMessage('Erro ao processar arquivo CSV. Verifique se o formato está correto.');
+        setSnackbarMessage('Erro ao processar arquivo Excel. Verifique se o formato está correto.');
         setSnackbarSeverity('error');
         setSnackbarOpen(true);
-      },
-    });
+      }
+    };
+
+    reader.readAsArrayBuffer(file);
   };
 
   const handleImport = async () => {
@@ -221,10 +269,10 @@ export default function ImportStudents({ groups, onImportComplete }: ImportStude
               Para importar alunos, siga os passos:
             </Typography>
             <Typography component="ol" sx={{ pl: 2 }}>
-              <li>Baixe o template do arquivo CSV</li>
+              <li>Baixe o template da planilha Excel</li>
               <li>Preencha os dados dos alunos (Nome é obrigatório)</li>
               <li>Selecione o grupo</li>
-              <li>Faça upload do arquivo preenchido</li>
+              <li>Faça upload da planilha preenchida</li>
             </Typography>
           </Box>
 
@@ -234,7 +282,7 @@ export default function ImportStudents({ groups, onImportComplete }: ImportStude
               onClick={downloadTemplate}
               sx={{ alignSelf: 'flex-start' }}
             >
-              Baixar Template CSV
+              Baixar Template Excel
             </Button>
 
             <FormControl fullWidth required>
@@ -257,18 +305,18 @@ export default function ImportStudents({ groups, onImportComplete }: ImportStude
               component="label"
               sx={{ alignSelf: 'flex-start' }}
             >
-              Upload CSV
+              Upload Excel
               <input
                 type="file"
                 hidden
-                accept=".csv"
+                accept=".xlsx,.xls"
                 onChange={handleFileUpload}
               />
             </Button>
 
             {parsedStudents.length > 0 && (
               <Typography>
-                {parsedStudents.length} alunos encontrados no arquivo
+                {parsedStudents.length} alunos encontrados na planilha
               </Typography>
             )}
           </Box>

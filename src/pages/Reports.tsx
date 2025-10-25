@@ -805,50 +805,202 @@ export function Reports() {
            <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
              {reportTitle} ({filteredPayments.length} registros)
            </Typography>
-          <TableContainer component={Paper} sx={{ maxHeight: 600 }}>
-            <Table stickyHeader>
-              <TableHead>
-                <TableRow>
-                  <TableCell sx={{ fontWeight: 600 }}>Aluno</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Grupo</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Valor</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Vencimento</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Pagamento</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {filteredPayments.length === 0 ? (
+          
+          {/* Layout Desktop - Tabela */}
+          <Box sx={{ display: { xs: 'none', md: 'block' } }}>
+            <TableContainer component={Paper} sx={{ maxHeight: 600 }}>
+              <Table stickyHeader>
+                <TableHead>
                   <TableRow>
-                    <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
-                      <Typography variant="body1" color="text.secondary">
-                        Nenhum pagamento encontrado
-                      </Typography>
-                    </TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Aluno</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Grupo</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Valor</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Vencimento</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Pagamento</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
                   </TableRow>
-                ) : (
-                  filteredPayments.map((payment) => (
-                    <TableRow key={payment.id} hover>
-                      <TableCell>{payment.student_name}</TableCell>
-                      <TableCell>{payment.group_name}</TableCell>
-                      <TableCell>{formatCurrency(payment.value)}</TableCell>
-                      <TableCell>{formatDate(payment.due_date)}</TableCell>
-                      <TableCell>
-                        {payment.payment_date ? formatDate(payment.payment_date) : '-'}
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={getStatusLabel(payment.status)}
-                          color={getStatusColor(payment.status) as any}
-                          size="small"
-                        />
+                </TableHead>
+                <TableBody>
+                  {filteredPayments.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
+                        <Typography variant="body1" color="text.secondary">
+                          Nenhum pagamento encontrado
+                        </Typography>
                       </TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
+                  ) : (
+                    filteredPayments.map((payment) => (
+                      <TableRow key={payment.id} hover>
+                        <TableCell>{payment.student_name}</TableCell>
+                        <TableCell>{payment.group_name}</TableCell>
+                        <TableCell>{formatCurrency(payment.value)}</TableCell>
+                        <TableCell>{formatDate(payment.due_date)}</TableCell>
+                        <TableCell>
+                          {payment.payment_date ? formatDate(payment.payment_date) : '-'}
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            label={getStatusLabel(payment.status)}
+                            color={getStatusColor(payment.status) as any}
+                            size="small"
+                          />
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Box>
+
+          {/* Layout Mobile - Cards */}
+          <Box sx={{ display: { xs: 'block', md: 'none' }, mt: 1, overflow: 'hidden' }}>
+            {filteredPayments.length === 0 ? (
+              <Card sx={{ textAlign: 'center', py: 4 }}>
+                <CardContent>
+                  <Typography variant="body1" color="text.secondary">
+                    Nenhum pagamento encontrado
+                  </Typography>
+                </CardContent>
+              </Card>
+            ) : (
+              filteredPayments.map((payment) => (
+                <Card key={payment.id} sx={{ mb: 1, boxShadow: 1, overflow: 'hidden' }}>
+                  <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
+                    {/* Cabeçalho com aluno e status */}
+                    <Box sx={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      alignItems: 'center', 
+                      mb: 1,
+                      flexWrap: 'nowrap',
+                      overflow: 'hidden'
+                    }}>
+                      <Typography variant="subtitle2" sx={{ 
+                        fontWeight: 600,
+                        fontSize: '0.875rem',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        flex: 1,
+                        mr: 1
+                      }}>
+                        {payment.student_name}
+                      </Typography>
+                      <Chip
+                        label={getStatusLabel(payment.status)}
+                        color={getStatusColor(payment.status) as any}
+                        sx={{
+                          fontSize: '0.7rem',
+                          height: 20,
+                          flexShrink: 0
+                        }}
+                        size="small"
+                      />
+                    </Box>
+                    
+                    {/* Layout vertical compacto para mobile */}
+                    <Box sx={{ mb: 1 }}>
+                      {/* Grupo e Valor em linha */}
+                      <Box sx={{ 
+                        display: 'flex', 
+                        justifyContent: 'space-between', 
+                        alignItems: 'flex-start',
+                        mb: 0.5,
+                        gap: 1
+                      }}>
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                          <Typography variant="caption" color="text.secondary" sx={{ 
+                            fontSize: '0.65rem',
+                            display: 'block',
+                            lineHeight: 1
+                          }}>
+                            Grupo
+                          </Typography>
+                          <Typography variant="body2" sx={{ 
+                            fontWeight: 500, 
+                            fontSize: '0.8rem',
+                            lineHeight: 1.1,
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis'
+                          }}>
+                            {payment.group_name}
+                          </Typography>
+                        </Box>
+                        <Box sx={{ flex: 1, minWidth: 0, textAlign: 'right' }}>
+                          <Typography variant="caption" color="text.secondary" sx={{ 
+                            fontSize: '0.65rem',
+                            display: 'block',
+                            lineHeight: 1
+                          }}>
+                            Valor
+                          </Typography>
+                          <Typography variant="body2" sx={{ 
+                            fontWeight: 600, 
+                            fontSize: '0.8rem',
+                            lineHeight: 1.1,
+                            color: '#1976d2'
+                          }}>
+                            {formatCurrency(payment.value)}
+                          </Typography>
+                        </Box>
+                      </Box>
+                      
+                      {/* Vencimento e Pagamento em linha */}
+                      <Box sx={{ 
+                        display: 'flex', 
+                        justifyContent: 'space-between', 
+                        alignItems: 'flex-start',
+                        gap: 1
+                      }}>
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                          <Typography variant="caption" color="text.secondary" sx={{ 
+                            fontSize: '0.65rem',
+                            display: 'block',
+                            lineHeight: 1
+                          }}>
+                            Vencimento
+                          </Typography>
+                          <Typography variant="body2" sx={{ 
+                            fontWeight: 500, 
+                            fontSize: '0.8rem',
+                            lineHeight: 1.1,
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis'
+                          }}>
+                            {formatDate(payment.due_date)}
+                          </Typography>
+                        </Box>
+                        <Box sx={{ flex: 1, minWidth: 0, textAlign: 'right' }}>
+                          <Typography variant="caption" color="text.secondary" sx={{ 
+                            fontSize: '0.65rem',
+                            display: 'block',
+                            lineHeight: 1
+                          }}>
+                            Pagamento
+                          </Typography>
+                          <Typography variant="body2" sx={{ 
+                            fontWeight: 500, 
+                            fontSize: '0.8rem',
+                            lineHeight: 1.1,
+                            color: payment.payment_date ? '#4caf50' : '#666',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis'
+                          }}>
+                            {payment.payment_date ? formatDate(payment.payment_date) : '-'}
+                          </Typography>
+                        </Box>
+                      </Box>
+                    </Box>
+                  </CardContent>
+                </Card>
+              ))
+            )}
+          </Box>
         </CardContent>
       </Card>
     </Box>

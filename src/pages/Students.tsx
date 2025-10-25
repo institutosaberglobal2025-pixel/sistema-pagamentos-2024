@@ -304,7 +304,8 @@ export function Students() {
     <Box sx={{ 
       maxWidth: 1200,
       mx: 'auto',
-      width: '100%'
+      width: '100%',
+      pb: { xs: 4, sm: 2 } // Adiciona espaçamento inferior para mobile
     }}>
       <Box
         sx={{
