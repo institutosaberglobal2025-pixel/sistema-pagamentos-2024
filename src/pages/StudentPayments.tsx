@@ -301,13 +301,11 @@ export default function StudentPayments() {
     }));
   };
 
-  const handleSelectAll = (checked: boolean) => {
+  const handleSelectAll = (_event: React.ChangeEvent<HTMLInputElement>, checked: boolean) => {
     if (checked) {
-      setSelectedStudents(new Set(filteredStudents.map(student => student.id)));
-      setSelectAll(true);
+      setSelectedStudents(new Set(filteredStudents.map(s => s.id)));
     } else {
       setSelectedStudents(new Set());
-      setSelectAll(false);
     }
   };
 
@@ -452,7 +450,7 @@ export default function StudentPayments() {
       const results = await Promise.all(promises);
       
       // Verificar se houve erros
-      const errors = results.filter(result => result.error || !result.success);
+      const errors = results.filter(result => !result.success);
       if (errors.length > 0) {
         console.error('Erros ao atribuir planos:', errors);
         showSnackbar(`Erro ao atribuir plano para ${errors.length} aluno(s)`, 'error');

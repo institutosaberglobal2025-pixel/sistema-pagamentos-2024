@@ -1,35 +1,29 @@
 import { useState, useEffect } from 'react';
 import {
   Box,
+  Typography,
   Button,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   TextField,
+  Snackbar,
+  Alert,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
-  Typography,
+  Paper,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   IconButton,
-  MenuItem,
   FormControl,
   InputLabel,
   Select,
-  Alert,
-  Snackbar,
-  Paper,
-  List,
-  ListItem,
-  ListItemText,
-  Divider,
-  RadioGroup,
-  FormControlLabel,
-  Radio,
+  MenuItem,
   Checkbox,
+  Divider,
 } from '@mui/material';
 import { Edit as EditIcon, Trash as DeleteIcon } from 'lucide-react';
 import { supabase } from '../config/supabase';
@@ -872,7 +866,7 @@ export function Students() {
           
           {dependenciesModal.dependencies?.dependentItems && dependenciesModal.dependencies.dependentItems.length > 0 && (
             <Box>
-              {dependenciesModal.dependencies.dependentItems.map((item, index) => (
+              {dependenciesModal.dependencies?.dependentItems?.map((item, index) => (
                 <Box key={index} sx={{ mb: 2 }}>
                   <Typography variant="h6" sx={{ 
                     color: item.type === 'payment_plans' ? 'error.main' : 
@@ -889,7 +883,7 @@ export function Students() {
                     </Typography>
                   </Paper>
                   
-                  {index < dependenciesModal.dependencies.dependentItems.length - 1 && (
+                  {index < (dependenciesModal.dependencies?.dependentItems?.length || 0) - 1 && (
                     <Divider sx={{ mt: 2 }} />
                   )}
                 </Box>

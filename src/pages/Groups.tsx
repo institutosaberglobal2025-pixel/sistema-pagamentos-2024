@@ -19,9 +19,6 @@ import {
   Box,
   Snackbar,
   Alert,
-  List,
-  ListItem,
-  ListItemText,
   Divider,
 } from '@mui/material';
 import { Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
@@ -469,7 +466,7 @@ export default function Groups() {
                     </Paper>
                   )}
                   
-                  {index < dependenciesModal.dependencies.dependentItems.length - 1 && (
+                  {index < (dependenciesModal.dependencies?.dependentItems?.length || 0) - 1 && (
                     <Divider sx={{ mt: 2 }} />
                   )}
                 </Box>

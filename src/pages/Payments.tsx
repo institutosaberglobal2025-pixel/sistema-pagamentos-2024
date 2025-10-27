@@ -79,7 +79,6 @@ export default function Payments() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState<string>('');
   const [currentUserAdminId, setCurrentUserAdminId] = useState<string | null>(null);
-  const [plansWithStudents, setPlansWithStudents] = useState<Set<string>>(new Set());
   const [warningModalOpen, setWarningModalOpen] = useState(false);
   const [warningModalMessage, setWarningModalMessage] = useState('');
   const [successModalOpen, setSuccessModalOpen] = useState(false);
@@ -340,7 +339,7 @@ export default function Payments() {
         setEditingPlan(null);
       } else {
         // Criar novo plano
-        const { data: newPlan, error: insertError } = await supabase
+        const { error: insertError } = await supabase
           .from('payment_plans')
           .insert({
             name: planName,

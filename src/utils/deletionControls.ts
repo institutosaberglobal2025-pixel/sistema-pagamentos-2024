@@ -176,7 +176,7 @@ export async function canDeletePaymentPlan(planId: string): Promise<DeletionChec
     // Alunos associados BLOQUEIAM a exclusão
     if (associatedStudents && associatedStudents.length > 0) {
       const studentNames = associatedStudents
-        .map(s => s.students?.name)
+        .map((s: any) => s.students?.name)
         .filter(name => name)
         .join(', ');
 
