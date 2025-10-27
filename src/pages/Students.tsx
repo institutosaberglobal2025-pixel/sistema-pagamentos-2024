@@ -21,11 +21,22 @@ import {
   Select,
   Alert,
   Snackbar,
+  Paper,
+  List,
+  ListItem,
+  ListItemText,
+  Divider,
+  RadioGroup,
+  FormControlLabel,
+  Radio,
+  Checkbox,
 } from '@mui/material';
 import { Edit as EditIcon, Trash as DeleteIcon } from 'lucide-react';
 import { supabase } from '../config/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import ImportStudents from '../components/ImportStudents';
+import { canDeleteStudent, deleteWithCleanup } from '../utils/deletionControls';
+import type { DeletionCheck } from '../utils/deletionControls';
 
 interface Student {
   id: string;
@@ -59,12 +70,29 @@ export function Students() {
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const [snackbarSeverity, setSnackbarSeverity] = useState<'success' | 'error'>('success');
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  
+  // Estados para exclusão de aluno
   const [studentToDelete, setStudentToDelete] = useState<Student | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  
+  // Estados para o modal de dependências
+  const [dependenciesModal, setDependenciesModal] = useState<{
+    open: boolean;
+    student: Student | null;
+    dependencies: DeletionCheck | null;
+  }>({
+    open: false,
+    student: null,
+    dependencies: null
+  });
   
   // Estados para filtros e busca
   const [searchTerm, setSearchTerm] = useState('');
   const [filterGroup, setFilterGroup] = useState('');
+  
+  // Estados para seleção múltipla
+  const [selectedStudents, setSelectedStudents] = useState<Set<string>>(new Set());
+  const [selectAll, setSelectAll] = useState(false);
 
   useEffect(() => {
     fetchCurrentUserAdminId();
@@ -273,30 +301,168 @@ export function Students() {
     }
   };
 
-  const handleDeleteClick = (student: Student) => {
-    setStudentToDelete(student);
-    setDeleteDialogOpen(true);
+  const handleDeleteClick = async (student: Student) => {
+    try {
+      console.log('Iniciando verificação de exclusão para aluno:', student.id, student.name);
+      // Verificar se o aluno pode ser excluído
+      const deletionCheck = await canDeleteStudent(student.id);
+      console.log('Resultado da verificação:', deletionCheck);
+      
+      if (!deletionCheck.canDelete) {
+        // Abrir modal de dependências para parcelas pagas (bloqueio)
+        setDependenciesModal({
+          open: true,
+          student: student,
+          dependencies: deletionCheck,
+        });
+        return;
+      }
+      
+      if (deletionCheck.warningMessage) {
+        // Abrir modal de dependências para parcelas pendentes (aviso)
+        setDependenciesModal({
+          open: true,
+          student: student,
+          dependencies: deletionCheck,
+        });
+        return;
+      }
+      
+      // Se não há dependências, abrir diálogo de confirmação normal
+      setStudentToDelete(student);
+      setDeleteDialogOpen(true);
+    } catch (error) {
+      console.error('Erro detalhado ao verificar exclusão do aluno:', error);
+      console.error('Student ID:', student.id);
+      console.error('Student Name:', student.name);
+      showSnackbar(`Erro ao verificar se o aluno pode ser excluído: ${error instanceof Error ? error.message : 'Erro desconhecido'}`, 'error');
+    }
   };
 
-  const handleDeleteConfirm = async () => {
-    if (!studentToDelete) return;
+  // Funções para seleção múltipla
+  const handleSelectAll = () => {
+    if (selectAll || selectedStudents.size === filteredStudents.length) {
+      // Desselecionar todos
+      setSelectedStudents(new Set());
+      setSelectAll(false);
+    } else {
+      // Selecionar todos os alunos filtrados
+      const allStudentIds = new Set(filteredStudents.map(student => student.id));
+      setSelectedStudents(allStudentIds);
+      setSelectAll(true);
+    }
+  };
+
+  const handleSelectStudent = (studentId: string) => {
+    const newSelected = new Set(selectedStudents);
+    if (newSelected.has(studentId)) {
+      newSelected.delete(studentId);
+    } else {
+      newSelected.add(studentId);
+    }
+    setSelectedStudents(newSelected);
+    
+    // Atualizar estado do selectAll
+    if (newSelected.size === 0) {
+      setSelectAll(false);
+    } else if (newSelected.size === filteredStudents.length) {
+      setSelectAll(true);
+    } else {
+      setSelectAll(false);
+    }
+  };
+
+  // Função para exclusão múltipla
+  const handleBulkDelete = async () => {
+    if (selectedStudents.size === 0) return;
+
+    const selectedStudentsList = filteredStudents.filter(student => 
+      selectedStudents.has(student.id)
+    );
+
+    console.log('Alunos selecionados para exclusão:', selectedStudentsList.map(s => s.name));
 
     try {
-      const { error } = await supabase
-        .from('students')
-        .delete()
-        .eq('id', studentToDelete.id);
+      // Verificar se todos os alunos selecionados podem ser excluídos
+      const deletionChecks = await Promise.all(
+        selectedStudentsList.map(async (student) => {
+          const check = await canDeleteStudent(student.id);
+          return { student, check };
+        })
+      );
 
-      if (error) throw error;
+      // Separar alunos que podem ser excluídos dos que não podem
+      const cannotDelete = deletionChecks.filter(({ check }) => !check.canDelete);
+      const canDelete = deletionChecks.filter(({ check }) => check.canDelete && !check.warningMessage);
+      const hasWarnings = deletionChecks.filter(({ check }) => check.canDelete && check.warningMessage);
 
-      showSnackbar('Aluno excluído com sucesso!', 'success');
-      fetchStudents();
+      console.log('Verificação de exclusão:', { cannotDelete: cannotDelete.length, canDelete: canDelete.length, hasWarnings: hasWarnings.length });
+
+      if (cannotDelete.length > 0) {
+        const blockedNames = cannotDelete.map(({ student }) => student.name).join(', ');
+        showSnackbar(`Os seguintes alunos não podem ser excluídos pois possuem parcelas pagas: ${blockedNames}`, 'error');
+        return;
+      }
+
+      if (hasWarnings.length > 0) {
+        const warningNames = hasWarnings.map(({ student }) => student.name).join(', ');
+        const confirmDelete = window.confirm(
+          `Os seguintes alunos possuem parcelas pendentes que serão excluídas: ${warningNames}\n\nDeseja continuar com a exclusão?`
+        );
+        if (!confirmDelete) return;
+      }
+
+      // Confirmar exclusão
+      const confirmMessage = selectedStudents.size === 1 
+        ? `Tem certeza que deseja excluir o aluno selecionado?`
+        : `Tem certeza que deseja excluir os ${selectedStudents.size} alunos selecionados?`;
+      
+      const confirmed = window.confirm(confirmMessage);
+      if (!confirmed) return;
+
+      // Executar exclusões
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (const student of selectedStudentsList) {
+        try {
+          console.log(`Excluindo aluno: ${student.name} (ID: ${student.id})`);
+          const result = await deleteWithCleanup('student', student.id);
+          console.log(`Resultado da exclusão:`, result);
+          if (result.success) {
+            console.log(`Aluno ${student.name} excluído com sucesso`);
+            successCount++;
+          } else {
+            console.error(`Falha ao excluir aluno ${student.name}:`, result.message);
+            errorCount++;
+          }
+        } catch (error) {
+          console.error(`Erro ao excluir aluno ${student.name}:`, error);
+          errorCount++;
+        }
+      }
+
+      console.log(`Exclusão concluída: ${successCount} sucessos, ${errorCount} erros`);
+
+      // Limpar seleções
+      setSelectedStudents(new Set());
+      setSelectAll(false);
+
+      // Atualizar lista
+      console.log('Atualizando lista de alunos...');
+      await fetchStudents();
+      console.log('Lista de alunos atualizada');
+
+      // Mostrar resultado
+      if (errorCount === 0) {
+        showSnackbar(`${successCount} aluno(s) excluído(s) com sucesso!`, 'success');
+      } else {
+        showSnackbar(`${successCount} aluno(s) excluído(s), ${errorCount} erro(s) ocorreram.`, 'error');
+      }
+
     } catch (error) {
-      console.error('Erro ao excluir aluno:', error);
-      showSnackbar('Erro ao excluir aluno. Por favor, tente novamente.', 'error');
-    } finally {
-      setDeleteDialogOpen(false);
-      setStudentToDelete(null);
+      console.error('Erro na exclusão múltipla:', error);
+      showSnackbar('Erro ao excluir alunos. Tente novamente.', 'error');
     }
   };
 
@@ -329,6 +495,27 @@ export function Students() {
           Alunos
         </Typography>
         <Box sx={{ display: 'flex', gap: 2 }}>
+          {selectedStudents.size > 0 && (
+            <Button
+              variant="contained"
+              color="error"
+              onClick={handleBulkDelete}
+              sx={{
+                width: { xs: '100%', sm: 'auto' },
+                py: { xs: 1.5, sm: 1.5 },
+                px: { xs: 2, sm: 4 },
+                fontSize: '1rem',
+                textTransform: 'none',
+                fontWeight: 500,
+                boxShadow: 2,
+                '&:hover': {
+                  boxShadow: 3
+                }
+              }}
+            >
+              Excluir Selecionados ({selectedStudents.size})
+            </Button>
+          )}
           <ImportStudents
             groups={groups}
             onImportComplete={fetchStudents}
@@ -435,6 +622,24 @@ export function Students() {
                   fontSize: '0.9375rem',
                   backgroundColor: 'background.paper',
                   borderBottom: '2px solid',
+                  borderColor: 'divider',
+                  width: '50px',
+                  padding: '8px'
+                }}
+              >
+                <Checkbox
+                  checked={selectAll}
+                  indeterminate={selectedStudents.size > 0 && selectedStudents.size < filteredStudents.length}
+                  onChange={handleSelectAll}
+                  size="small"
+                />
+              </TableCell>
+              <TableCell 
+                sx={{ 
+                  fontWeight: 600,
+                  fontSize: '0.9375rem',
+                  backgroundColor: 'background.paper',
+                  borderBottom: '2px solid',
                   borderColor: 'divider'
                 }}
               >
@@ -500,6 +705,13 @@ export function Students() {
                   }
                 }}
               >
+                <TableCell sx={{ padding: '8px' }}>
+                  <Checkbox
+                    checked={selectedStudents.has(student.id)}
+                    onChange={() => handleSelectStudent(student.id)}
+                    size="small"
+                  />
+                </TableCell>
                 <TableCell>{student.name}</TableCell>
                 <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
                   {student.email}
@@ -634,37 +846,193 @@ export function Students() {
         </DialogActions>
       </Dialog>
 
-      {/* Dialog de Confirmação de Exclusão */}
+      {/* Modal de Dependências */}
       <Dialog
-        open={deleteDialogOpen}
-        onClose={() => setDeleteDialogOpen(false)}
-        maxWidth="xs"
+        open={dependenciesModal.open}
+        onClose={() => setDependenciesModal({ open: false, student: null, dependencies: null })}
+        maxWidth="md"
         fullWidth
         PaperProps={{
           sx: {
             borderRadius: 2,
-            boxShadow: 3
+            p: 2
           }
         }}
+      >
+        <DialogTitle sx={{ 
+          color: dependenciesModal.dependencies?.canDelete ? 'warning.main' : 'error.main', 
+          fontWeight: 'bold' 
+        }}>
+          {dependenciesModal.dependencies?.canDelete ? '⚠️ Aviso de Exclusão' : '🚫 Não é possível excluir o aluno'}
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" sx={{ mb: 3 }}>
+            O aluno <strong>"{dependenciesModal.student?.name}"</strong> possui dependências:
+          </Typography>
+          
+          {dependenciesModal.dependencies?.dependentItems && dependenciesModal.dependencies.dependentItems.length > 0 && (
+            <Box>
+              {dependenciesModal.dependencies.dependentItems.map((item, index) => (
+                <Box key={index} sx={{ mb: 2 }}>
+                  <Typography variant="h6" sx={{ 
+                    color: item.type === 'payment_plans' ? 'error.main' : 
+                           item.type === 'paid_installments' ? 'error.main' : 'warning.main', 
+                    mb: 1 
+                  }}>
+                    {item.type === 'payment_plans' ? '📋 Planos de Pagamento' :
+                     item.type === 'paid_installments' ? '💰 Parcelas Pagas' : '⏰ Parcelas Vencidas'} ({item.count})
+                  </Typography>
+                  
+                  <Paper sx={{ p: 2, bgcolor: 'grey.50', border: '1px solid', borderColor: 'grey.200' }}>
+                    <Typography variant="body2">
+                      {item.details}
+                    </Typography>
+                  </Paper>
+                  
+                  {index < dependenciesModal.dependencies.dependentItems.length - 1 && (
+                    <Divider sx={{ mt: 2 }} />
+                  )}
+                </Box>
+              ))}
+            </Box>
+          )}
+          
+          {/* Instruções baseadas no tipo de bloqueio */}
+          {!dependenciesModal.dependencies?.canDelete ? (
+            // Modal de bloqueio - quando há planos de pagamento
+            <Box sx={{ mt: 3, p: 3, bgcolor: 'error.light', borderRadius: 2, border: '2px solid', borderColor: 'error.main' }}>
+              <Typography variant="h6" sx={{ color: 'error.contrastText', mb: 2, fontWeight: 'bold' }}>
+                🚫 Exclusão Bloqueada
+              </Typography>
+              
+              <Typography variant="body1" sx={{ color: 'error.contrastText', mb: 2 }}>
+                <strong>Para excluir este aluno, siga os passos abaixo:</strong>
+              </Typography>
+              
+              <Box component="ol" sx={{ color: 'error.contrastText', pl: 2, mb: 2 }}>
+                <Typography component="li" variant="body2" sx={{ mb: 1 }}>
+                  <strong>Primeiro:</strong> Vá em <strong>"Relatórios"</strong>, gere um relatório do aluno e faça o download para manter o histórico
+                </Typography>
+                <Typography component="li" variant="body2" sx={{ mb: 1 }}>
+                  <strong>Depois:</strong> Vá para a seção <strong>"Pagamentos"</strong> e exclua o(s) plano(s) de pagamento associado(s) a este aluno
+                </Typography>
+                <Typography component="li" variant="body2" sx={{ mb: 1 }}>
+                  <strong>Por último:</strong> Retorne aqui e exclua o aluno
+                </Typography>
+              </Box>
+              
+              <Typography variant="body2" sx={{ color: 'error.contrastText', fontStyle: 'italic' }}>
+                ⚠️ A exclusão só será habilitada após a remoção dos planos de pagamento.
+              </Typography>
+            </Box>
+          ) : (
+            // Modal de aviso - quando não há planos mas há parcelas
+            <Box sx={{ mt: 3, p: 3, bgcolor: 'warning.light', borderRadius: 2, border: '2px solid', borderColor: 'warning.main' }}>
+              <Typography variant="h6" sx={{ color: 'warning.contrastText', mb: 2, fontWeight: 'bold' }}>
+                ⚠️ Instruções Importantes
+              </Typography>
+              
+              <Typography variant="body1" sx={{ color: 'warning.contrastText', mb: 2 }}>
+                <strong>Antes de excluir este aluno:</strong>
+              </Typography>
+              
+              <Box component="ol" sx={{ color: 'warning.contrastText', pl: 2, mb: 2 }}>
+                <Typography component="li" variant="body2" sx={{ mb: 1 }}>
+                  Vá para a seção <strong>"Pagamentos"</strong> e exclua o plano de pagamento associado a este aluno
+                </Typography>
+                <Typography component="li" variant="body2" sx={{ mb: 1 }}>
+                  Se desejar manter informações das parcelas para histórico, vá em <strong>"Relatórios"</strong>, gere um relatório do aluno e faça o download antes de excluir
+                </Typography>
+              </Box>
+              
+              <Typography variant="body2" sx={{ color: 'warning.contrastText', fontStyle: 'italic' }}>
+                💡 A exclusão do aluno removerá automaticamente todas as suas parcelas e dados associados.
+              </Typography>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 2, pt: 0 }}>
+          <Button 
+            onClick={() => setDependenciesModal({ open: false, student: null, dependencies: null })}
+            variant="outlined"
+            sx={{
+              borderRadius: 1,
+              textTransform: 'none'
+            }}
+          >
+            Cancelar
+          </Button>
+          <Button 
+            onClick={async () => {
+              if (!dependenciesModal.student) return;
+
+              try {
+                // Executar exclusão com limpeza de dependências
+                // Sempre excluir todas as parcelas do aluno
+                const result = await deleteWithCleanup('student', dependenciesModal.student.id, true);
+                
+                if (result.success) {
+                  showSnackbar('Aluno e todas as suas parcelas foram excluídos com sucesso!', 'success');
+                  fetchStudents();
+                } else {
+                  showSnackbar(result.message, 'error');
+                }
+              } catch (error) {
+                console.error('Erro ao excluir aluno:', error);
+                showSnackbar('Erro inesperado ao excluir aluno.', 'error');
+              } finally {
+                // Fechar modal e resetar estados
+                setDependenciesModal({ open: false, student: null, dependencies: null });
+              }
+            }}
+            variant="contained"
+            color="error"
+            disabled={!dependenciesModal.dependencies?.canDelete}
+            sx={{
+              borderRadius: 1,
+              textTransform: 'none'
+            }}
+          >
+            Excluir Aluno
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Diálogo de confirmação de exclusão simples */}
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={() => setDeleteDialogOpen(false)}
       >
         <DialogTitle>Confirmar Exclusão</DialogTitle>
         <DialogContent>
           <Typography>
-            Tem certeza que deseja excluir o aluno "{studentToDelete?.name}"?
-            Esta ação não pode ser desfeita.
+            Tem certeza que deseja excluir o aluno "{studentToDelete?.name}"? Esta ação não pode ser desfeita.
           </Typography>
         </DialogContent>
-        <DialogActions sx={{ p: 2, pt: 0 }}>
-          <Button
-            onClick={() => setDeleteDialogOpen(false)}
-            sx={{ color: 'text.secondary' }}
-          >
-            Cancelar
-          </Button>
-          <Button
-            onClick={handleDeleteConfirm}
-            variant="contained"
-            color="error"
+        <DialogActions>
+          <Button onClick={() => setDeleteDialogOpen(false)}>Cancelar</Button>
+          <Button 
+            onClick={async () => {
+              if (!studentToDelete) return;
+              
+              try {
+                const result = await deleteWithCleanup('student', studentToDelete.id, true);
+                if (result.success) {
+                  showSnackbar(result.message, 'success');
+                  fetchStudents(); // Recarregar lista
+                } else {
+                  showSnackbar(result.message, 'error');
+                }
+              } catch (error) {
+                console.error('Erro ao excluir aluno:', error);
+                showSnackbar('Erro inesperado ao excluir aluno.', 'error');
+              } finally {
+                setDeleteDialogOpen(false);
+                setStudentToDelete(null);
+              }
+            }}
+            color="error" 
+            autoFocus
           >
             Excluir
           </Button>
@@ -673,11 +1041,22 @@ export function Students() {
 
       {/* Snackbar para feedback */}
       <Snackbar
-        open={snackbarOpen}
-        autoHideDuration={6000}
-        onClose={() => setSnackbarOpen(false)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
+          open={snackbarOpen}
+          autoHideDuration={6000}
+          onClose={() => setSnackbarOpen(false)}
+          anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+          sx={{
+            '& .MuiSnackbarContent-root': {
+              position: 'fixed',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              zIndex: 9999,
+              minWidth: '400px',
+              maxWidth: '600px'
+            }
+          }}
+        >
         <Alert
           onClose={() => setSnackbarOpen(false)}
           severity={snackbarSeverity}

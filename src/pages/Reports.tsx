@@ -199,6 +199,14 @@ export function Reports() {
       }
 
       console.log('👥 Estudantes encontrados:', students);
+      
+      // DEBUG: Verificar especificamente João Silva
+      const joaoSilva = students?.find(s => s.name.includes('João Silva'));
+      if (joaoSilva) {
+        console.log('🎯 João Silva encontrado:', joaoSilva);
+      } else {
+        console.log('❌ João Silva NÃO encontrado nos estudantes');
+      }
 
       const studentIds = students?.map(s => s.id) || [];
 
@@ -222,42 +230,7 @@ export function Reports() {
         return;
       }
 
-      // Buscar planos de pagamento dos estudantes (igual ao Dashboard)
-      const { data: studentPlans, error: plansError } = await supabase
-        .from('student_payment_plans')
-        .select('payment_plan_id, student_id')
-        .in('student_id', studentIds);
-
-      if (plansError) {
-        console.error('❌ Erro ao buscar planos:', plansError);
-        throw plansError;
-      }
-
-      console.log('📋 Planos de pagamento encontrados:', studentPlans);
-
-      const planIds = studentPlans?.map(p => p.payment_plan_id) || [];
-
-      if (planIds.length === 0) {
-        console.log('⚠️ Nenhum plano de pagamento encontrado');
-        setPayments([]);
-        setMonthlyStats({
-          paidThisMonth: 0,
-          paidThisMonthAmount: 0,
-          overdueThisMonth: 0,
-          overdueThisMonthAmount: 0,
-          expectedThisMonth: 0,
-          expectedThisMonthAmount: 0,
-        });
-        setGeneralStats({
-          totalExpectedAmount: 0,
-          totalPaidAmount: 0,
-          totalStudents: students?.length || 0,
-        });
-        setLoading(false);
-        return;
-      }
-
-      // Buscar parcelas (igual ao Dashboard)
+      // Buscar parcelas diretamente usando student_id (mais eficiente e correto)
       const { data: installments, error: installmentsError } = await supabase
         .from('installments')
         .select(`
@@ -266,9 +239,10 @@ export function Reports() {
           due_date,
           payment_date,
           status,
-          payment_plan_id
+          payment_plan_id,
+          student_id
         `)
-        .in('payment_plan_id', planIds);
+        .in('student_id', studentIds);
 
       if (installmentsError) {
         console.error('❌ Erro ao buscar parcelas:', installmentsError);
@@ -276,6 +250,12 @@ export function Reports() {
       }
 
       console.log('💰 Parcelas encontradas:', installments);
+      
+      // DEBUG: Verificar parcelas de João Silva
+      if (joaoSilva) {
+        const joaoInstallments = installments?.filter(i => i.student_id === joaoSilva.id);
+        console.log('🎯 Parcelas de João Silva:', joaoInstallments);
+      }
 
       // Processar dados para o relatório
       const paymentsData: PaymentData[] = [];
@@ -284,8 +264,7 @@ export function Reports() {
       const currentYear = today.getFullYear();
 
       for (const installment of installments || []) {
-        const studentPlan = studentPlans?.find(sp => sp.payment_plan_id === installment.payment_plan_id);
-        const student = students?.find(s => s.id === studentPlan?.student_id);
+        const student = students?.find(s => s.id === installment.student_id);
         const group = groups?.find(g => g.id === student?.group_id);
 
         if (student && group) {
@@ -306,10 +285,35 @@ export function Reports() {
             payment_date: installment.payment_date,
             status: status as 'paga' | 'em_aberto' | 'atrasada',
           });
+          
+          // DEBUG: Log quando João Silva é processado
+          if (student.name.includes('João Silva')) {
+            console.log('🎯 Processando parcela de João Silva:', {
+              installment_id: installment.id,
+              student_name: student.name,
+              group_name: group.name,
+              value: installment.value,
+              due_date: installment.due_date,
+              status: status
+            });
+          }
+        } else {
+          // DEBUG: Log quando dados estão faltando
+          console.log('❌ Dados faltando para parcela:', {
+            installment_id: installment.id,
+            student_found: !!student,
+            group_found: !!group,
+            student_id: installment.student_id
+          });
         }
       }
 
       console.log('📊 Dados processados para relatório:', paymentsData);
+      
+      // DEBUG: Verificar se João Silva está nos dados finais
+      const joaoPayments = paymentsData.filter(p => p.student_name.includes('João Silva'));
+      console.log('🎯 Pagamentos de João Silva no relatório final:', joaoPayments);
+      
       setPayments(paymentsData);
 
       // Calcular estatísticas gerais

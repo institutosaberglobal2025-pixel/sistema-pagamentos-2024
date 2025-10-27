@@ -19,10 +19,16 @@ import {
   Box,
   Snackbar,
   Alert,
+  List,
+  ListItem,
+  ListItemText,
+  Divider,
 } from '@mui/material';
 import { Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { supabase } from '../config/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { canDeleteGroup, deleteWithCleanup } from '../utils/deletionControls';
+import type { DeletionCheck } from '../utils/deletionControls';
 
 interface Group {
   id: string;
@@ -53,7 +59,26 @@ export default function Groups() {
   });
   const { user, isAdmin } = useAuth();
   const [currentUserAdminId, setCurrentUserAdminId] = useState<string | null>(null);
+  
+  // Estados para o modal de dependências
+  const [dependenciesModal, setDependenciesModal] = useState<{
+    open: boolean;
+    group: Group | null;
+    dependencies: DeletionCheck | null;
+  }>({
+    open: false,
+    group: null,
+    dependencies: null,
+  });
 
+  // Estado para o modal de confirmação de exclusão
+  const [confirmDeleteModal, setConfirmDeleteModal] = useState<{
+    open: boolean;
+    group: Group | null;
+  }>({
+    open: false,
+    group: null,
+  });
   useEffect(() => {
     const fetchCurrentUserAdminId = async () => {
       if (!user) return;
@@ -263,10 +288,6 @@ export default function Groups() {
   };
 
   const handleDelete = async (group: Group) => {
-    if (!confirm('Tem certeza que deseja excluir este grupo?')) {
-      return;
-    }
-
     // Verificar permissão
     const hasPermission = isAdmin || group.administrators.some(admin => admin.id === currentUserAdminId);
     if (!hasPermission) {
@@ -279,32 +300,24 @@ export default function Groups() {
     }
 
     try {
-      // Primeiro excluir as relações na tabela group_administrators
-      const { error: gaError } = await supabase
-        .from('group_administrators')
-        .delete()
-        .eq('group_id', group.id);
-
-      if (gaError) {
-        console.error('Erro ao excluir relações do grupo:', gaError);
-        throw gaError;
+      // Verificar se o grupo pode ser excluído
+      const deletionCheck = await canDeleteGroup(group.id);
+      
+      if (!deletionCheck.canDelete) {
+        // Abrir modal de dependências
+        setDependenciesModal({
+          open: true,
+          group: group,
+          dependencies: deletionCheck,
+        });
+        return;
       }
 
-      // Depois excluir o grupo
-      const { error } = await supabase
-        .from('groups')
-        .delete()
-        .eq('id', group.id);
-
-      if (error) throw error;
-
-      setSnackbar({
+      // Abrir modal de confirmação
+      setConfirmDeleteModal({
         open: true,
-        message: 'Grupo excluído com sucesso!',
-        severity: 'success',
+        group: group,
       });
-
-      fetchGroups();
     } catch (error) {
       console.error('Erro ao excluir grupo:', error);
       setSnackbar({
@@ -418,10 +431,178 @@ export default function Groups() {
         </DialogActions>
       </Dialog>
 
+      {/* Modal de Dependências */}
+      <Dialog
+        open={dependenciesModal.open}
+        onClose={() => setDependenciesModal({ open: false, group: null, dependencies: null })}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 2,
+            p: 2
+          }
+        }}
+      >
+        <DialogTitle sx={{ color: 'error.main', fontWeight: 'bold' }}>
+          ⚠️ Não é possível excluir o grupo
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" sx={{ mb: 3 }}>
+            O grupo <strong>"{dependenciesModal.group?.name}"</strong> possui dependências que impedem sua exclusão.
+            Você deve excluir primeiro os itens listados abaixo:
+          </Typography>
+          
+          {dependenciesModal.dependencies?.dependentItems && dependenciesModal.dependencies.dependentItems.length > 0 && (
+            <Box>
+              {dependenciesModal.dependencies.dependentItems.map((item, index) => (
+                <Box key={index} sx={{ mb: 2 }}>
+                  <Typography variant="h6" sx={{ color: 'error.main', mb: 1 }}>
+                    {item.type === 'students' ? '👥 Estudantes' : '💰 Planos de Pagamento'} ({item.count})
+                  </Typography>
+                  
+                  {item.details && (
+                    <Paper sx={{ p: 2, bgcolor: 'grey.50', border: '1px solid', borderColor: 'grey.200' }}>
+                      <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                        {item.details}
+                      </Typography>
+                    </Paper>
+                  )}
+                  
+                  {index < dependenciesModal.dependencies.dependentItems.length - 1 && (
+                    <Divider sx={{ mt: 2 }} />
+                  )}
+                </Box>
+              ))}
+            </Box>
+          )}
+          
+          <Box sx={{ mt: 3, p: 2, bgcolor: 'info.light', borderRadius: 1 }}>
+            <Typography variant="body2" sx={{ color: 'info.contrastText' }}>
+              💡 <strong>Dica:</strong> Para excluir este grupo, primeiro vá até as páginas de Estudantes e Planos de Pagamento 
+              para remover os itens listados acima.
+            </Typography>
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ p: 2, pt: 0 }}>
+          <Button 
+            onClick={() => setDependenciesModal({ open: false, group: null, dependencies: null })}
+            variant="contained"
+            sx={{
+              borderRadius: 1,
+              textTransform: 'none'
+            }}
+          >
+            Entendi
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Modal de confirmação de exclusão */}
+      <Dialog
+        open={confirmDeleteModal.open}
+        onClose={() => setConfirmDeleteModal({ open: false, group: null })}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 2,
+            p: 1
+          }
+        }}
+      >
+        <DialogTitle sx={{ color: 'error.main', fontWeight: 'bold', pb: 1 }}>
+          ⚠️ Confirmar Exclusão
+        </DialogTitle>
+        <DialogContent sx={{ pb: 2 }}>
+          <Typography variant="body1" sx={{ mb: 2 }}>
+            Tem certeza que deseja excluir o grupo <strong>"{confirmDeleteModal.group?.name}"</strong>?
+          </Typography>
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+            Esta ação não pode ser desfeita.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ p: 2, pt: 0 }}>
+          <Button 
+            onClick={() => setConfirmDeleteModal({ open: false, group: null })}
+            color="inherit"
+            sx={{
+              borderRadius: 1,
+              textTransform: 'none'
+            }}
+          >
+            Cancelar
+          </Button>
+          <Button
+            onClick={async () => {
+              if (confirmDeleteModal.group) {
+                // Salvar referência do grupo antes de fechar o modal
+                const groupToDelete = confirmDeleteModal.group;
+                console.log('Tentando excluir grupo:', groupToDelete);
+                
+                // Fechar o modal
+                setConfirmDeleteModal({ open: false, group: null });
+                
+                // Executar exclusão
+                try {
+                  console.log('Chamando deleteWithCleanup para grupo:', groupToDelete.id);
+                  const result = await deleteWithCleanup('group', groupToDelete.id);
+                  console.log('Resultado da exclusão:', result);
+                  
+                  if (result.success) {
+                    setSnackbar({
+                      open: true,
+                      message: result.message,
+                      severity: 'success',
+                    });
+                    console.log('Recarregando lista de grupos...');
+                    fetchGroups(); // Recarregar a lista
+                  } else {
+                    console.error('Falha na exclusão:', result);
+                    setSnackbar({
+                      open: true,
+                      message: result.message,
+                      severity: 'error',
+                    });
+                  }
+                } catch (error) {
+                  console.error('Erro ao excluir grupo:', error);
+                  setSnackbar({
+                    open: true,
+                    message: 'Erro ao excluir grupo',
+                    severity: 'error',
+                  });
+                }
+              }
+            }}
+            variant="contained"
+            color="error"
+            sx={{
+              borderRadius: 1,
+              textTransform: 'none'
+            }}
+          >
+            Excluir
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <Snackbar
         open={snackbar.open}
         autoHideDuration={6000}
         onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+        sx={{
+          '& .MuiSnackbarContent-root': {
+            position: 'fixed',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            zIndex: 9999,
+            minWidth: '400px',
+            maxWidth: '600px'
+          }
+        }}
       >
         <Alert
           onClose={() => setSnackbar({ ...snackbar, open: false })}

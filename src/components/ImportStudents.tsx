@@ -13,8 +13,11 @@ import {
   Box,
   Snackbar,
   Alert,
+  Card,
+  CardContent,
+  Chip,
 } from '@mui/material';
-import { Upload } from 'lucide-react';
+import { Upload, AlertTriangle, CheckCircle } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { supabase } from '../config/supabase';
 
@@ -32,10 +35,18 @@ interface Student {
   phone?: string;
 }
 
+interface DuplicateInfo {
+  totalStudents: number;
+  uniqueStudents: number;
+  duplicateCount: number;
+  duplicateStudents: Student[];
+}
+
 export default function ImportStudents({ groups, onImportComplete }: ImportStudentsProps) {
   const [open, setOpen] = useState(false);
   const [selectedGroup, setSelectedGroup] = useState('');
   const [parsedStudents, setParsedStudents] = useState<Student[]>([]);
+  const [duplicateInfo, setDuplicateInfo] = useState<DuplicateInfo | null>(null);
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const [snackbarSeverity, setSnackbarSeverity] = useState<'success' | 'error'>('success');
@@ -48,6 +59,7 @@ export default function ImportStudents({ groups, onImportComplete }: ImportStude
     setOpen(false);
     setSelectedGroup('');
     setParsedStudents([]);
+    setDuplicateInfo(null);
   };
 
   const downloadTemplate = () => {
@@ -79,6 +91,31 @@ export default function ImportStudents({ groups, onImportComplete }: ImportStude
     XLSX.writeFile(wb, 'template_alunos.xlsx');
   };
 
+  const detectDuplicates = (students: Student[]): DuplicateInfo => {
+    const seen = new Set<string>();
+    const duplicates: Student[] = [];
+    const unique: Student[] = [];
+
+    students.forEach(student => {
+      // Criar uma chave única baseada no nome (case-insensitive) e email
+      const key = `${student.name.toLowerCase().trim()}|${(student.email || '').toLowerCase().trim()}`;
+      
+      if (seen.has(key)) {
+        duplicates.push(student);
+      } else {
+        seen.add(key);
+        unique.push(student);
+      }
+    });
+
+    return {
+      totalStudents: students.length,
+      uniqueStudents: unique.length,
+      duplicateCount: duplicates.length,
+      duplicateStudents: duplicates
+    };
+  };
+
   const validateStudentData = (student: Student, index: number) => {
     if (!student.name || student.name.trim() === '') {
       return `Nome é obrigatório (linha ${index + 2})`;
@@ -97,6 +134,7 @@ export default function ImportStudents({ groups, onImportComplete }: ImportStude
 
     // Reseta o estado antes de processar novo arquivo
     setParsedStudents([]);
+    setDuplicateInfo(null);
 
     // Verificar se é arquivo Excel
     if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls')) {
@@ -156,8 +194,28 @@ export default function ImportStudents({ groups, onImportComplete }: ImportStude
           return;
         }
 
-        setParsedStudents(students);
-        setSnackbarMessage(`${students.length} alunos encontrados na planilha.`);
+        // Detectar duplicados
+        const duplicateAnalysis = detectDuplicates(students);
+        setDuplicateInfo(duplicateAnalysis);
+
+        // Usar apenas os alunos únicos
+        const uniqueStudents = students.filter((student, index) => {
+          const key = `${student.name.toLowerCase().trim()}|${(student.email || '').toLowerCase().trim()}`;
+          return students.findIndex(s => 
+            `${s.name.toLowerCase().trim()}|${(s.email || '').toLowerCase().trim()}` === key
+          ) === index;
+        });
+
+        setParsedStudents(uniqueStudents);
+
+        // Mensagem informativa sobre duplicados
+        if (duplicateAnalysis.duplicateCount > 0) {
+          setSnackbarMessage(
+            `${duplicateAnalysis.uniqueStudents} alunos únicos encontrados. ${duplicateAnalysis.duplicateCount} registros duplicados foram ignorados.`
+          );
+        } else {
+          setSnackbarMessage(`${students.length} alunos encontrados na planilha.`);
+        }
         setSnackbarSeverity('success');
         setSnackbarOpen(true);
       } catch (error) {
@@ -315,9 +373,44 @@ export default function ImportStudents({ groups, onImportComplete }: ImportStude
             </Button>
 
             {parsedStudents.length > 0 && (
-              <Typography>
-                {parsedStudents.length} alunos encontrados na planilha
-              </Typography>
+              <Card sx={{ mt: 2, bgcolor: 'background.paper' }}>
+                <CardContent>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                    <CheckCircle size={20} color="#4caf50" />
+                    <Typography variant="h6" color="success.main">
+                      Análise da Planilha
+                    </Typography>
+                  </Box>
+                  
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
+                    <Chip 
+                      label={`${parsedStudents.length} alunos serão importados`}
+                      color="success"
+                      variant="outlined"
+                    />
+                    {duplicateInfo && duplicateInfo.duplicateCount > 0 && (
+                      <Chip 
+                        label={`${duplicateInfo.duplicateCount} duplicados ignorados`}
+                        color="warning"
+                        variant="outlined"
+                        icon={<AlertTriangle size={16} />}
+                      />
+                    )}
+                  </Box>
+
+                  {duplicateInfo && duplicateInfo.duplicateCount > 0 && (
+                    <Alert severity="warning" sx={{ mt: 1 }}>
+                      <Typography variant="body2">
+                        <strong>Registros duplicados encontrados:</strong> {duplicateInfo.duplicateCount} alunos com mesmo nome e email foram ignorados para evitar duplicação no banco de dados.
+                      </Typography>
+                    </Alert>
+                  )}
+
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                    Total de registros na planilha: {duplicateInfo?.totalStudents || parsedStudents.length}
+                  </Typography>
+                </CardContent>
+              </Card>
             )}
           </Box>
         </DialogContent>

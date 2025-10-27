@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -35,6 +36,8 @@ import dayjs from 'dayjs';
 import 'dayjs/locale/pt-br';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
+import LaunchIcon from '@mui/icons-material/Launch';
+import { canDeletePaymentPlan, deleteWithCleanup } from '../utils/deletionControls';
 
 dayjs.locale('pt-br');
 
@@ -58,10 +61,11 @@ interface Group {
 
 export default function Payments() {
   const { user, isAdmin } = useAuth();
+  const navigate = useNavigate();
   const [planName, setPlanName] = useState('');
   const [startDate, setStartDate] = useState<dayjs.Dayjs | null>(null);
-  const [totalInstallments, setTotalInstallments] = useState<number>(1);
-  const [installmentValue, setInstallmentValue] = useState<number>(0);
+  const [totalInstallments, setTotalInstallments] = useState<number | ''>('');
+  const [installmentValue, setInstallmentValue] = useState<number | ''>('');
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const [snackbarSeverity, setSnackbarSeverity] = useState<'success' | 'error'>('success');
@@ -70,9 +74,16 @@ export default function Payments() {
   const [isEditing, setIsEditing] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [planToDelete, setPlanToDelete] = useState<PaymentPlan | null>(null);
+  const [deleteWarningMessage, setDeleteWarningMessage] = useState<string>('');
+  const [deletionBlocked, setDeletionBlocked] = useState(false);
   const [groups, setGroups] = useState<Group[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState<string>('');
   const [currentUserAdminId, setCurrentUserAdminId] = useState<string | null>(null);
+  const [plansWithStudents, setPlansWithStudents] = useState<Set<string>>(new Set());
+  const [warningModalOpen, setWarningModalOpen] = useState(false);
+  const [warningModalMessage, setWarningModalMessage] = useState('');
+  const [successModalOpen, setSuccessModalOpen] = useState(false);
+  const [successModalMessage, setSuccessModalMessage] = useState('');
 
   useEffect(() => {
     fetchCurrentUserAdminId();
@@ -205,30 +216,65 @@ export default function Payments() {
     setIsEditing(true);
   };
 
-  const handleDelete = (plan: PaymentPlan) => {
-    setPlanToDelete(plan);
-    setDeleteDialogOpen(true);
+  const handleDelete = async (plan: PaymentPlan) => {
+    try {
+      // Verificar se o plano pode ser excluído
+      const deletionCheck = await canDeletePaymentPlan(plan.id);
+      
+      setPlanToDelete(plan);
+      setDeleteWarningMessage(deletionCheck.warningMessage || '');
+      setDeletionBlocked(!deletionCheck.canDelete);
+      
+      if (!deletionCheck.canDelete) {
+        // Se há alunos associados, mostrar modal dedicado
+        if (deletionCheck.blockReason && deletionCheck.blockReason.includes('aluno')) {
+          setWarningModalMessage(deletionCheck.blockReason);
+          setWarningModalOpen(true);
+          return;
+        }
+        
+        // Para outros tipos de bloqueio (parcelas pagas), mostrar snackbar
+        let message = deletionCheck.blockReason || 'Não é possível excluir este plano.';
+        
+        if (deletionCheck.dependentItems && deletionCheck.dependentItems.length > 0) {
+          const paidInstallments = deletionCheck.dependentItems.find(item => item.type === 'paid_installments');
+          if (paidInstallments) {
+            message = `Este plano possui ${paidInstallments.count} parcela(s) paga(s) e não pode ser excluído para preservar o histórico financeiro.`;
+          }
+        }
+        
+        showSnackbar(message, 'error');
+        return;
+      }
+      
+      setDeleteDialogOpen(true);
+    } catch (error) {
+      console.error('Erro ao verificar exclusão do plano:', error);
+      showSnackbar('Erro ao verificar se o plano pode ser excluído.', 'error');
+    }
   };
 
   const confirmDelete = async () => {
     if (!planToDelete) return;
     
     try {
-      const { error } = await supabase
-        .from('payment_plans')
-        .delete()
-        .eq('id', planToDelete.id);
-        
-      if (error) throw error;
+      // Executar exclusão com limpeza de dependências
+      const result = await deleteWithCleanup('payment_plan', planToDelete.id);
       
-      showSnackbar('Plano de pagamento excluído com sucesso', 'success');
-      await fetchPaymentPlans();
-    } catch (error) {
+      if (result.success) {
+        showSnackbar(result.message, 'success');
+        await fetchPaymentPlans();
+      } else {
+        showSnackbar(result.message, 'error');
+      }
+    } catch (error: any) {
       console.error('Erro ao excluir plano:', error);
-      showSnackbar('Erro ao excluir plano de pagamento', 'error');
+      showSnackbar('Erro inesperado ao excluir plano de pagamento.', 'error');
     } finally {
       setDeleteDialogOpen(false);
       setPlanToDelete(null);
+      setDeleteWarningMessage('');
+      setDeletionBlocked(false);
     }
   };
 
@@ -237,17 +283,35 @@ export default function Payments() {
     setEditingPlan(null);
     setPlanName('');
     setStartDate(null);
-    setTotalInstallments(1);
-    setInstallmentValue(0);
+    setTotalInstallments('');
+    setInstallmentValue('');
   };
 
   const handleSave = async () => {
-    if (!planName || !startDate || totalInstallments < 1 || installmentValue <= 0) {
+    if (!planName || !startDate || !totalInstallments || totalInstallments < 1 || !installmentValue || installmentValue <= 0) {
       showSnackbar('Por favor, preencha todos os campos corretamente', 'error');
       return;
     }
 
     try {
+      // Verificar se já existe um plano com o mesmo nome (apenas para novos planos ou se o nome foi alterado)
+      if (!isEditing || (isEditing && editingPlan && editingPlan.name !== planName)) {
+        const { data: existingPlan, error: checkError } = await supabase
+          .from('payment_plans')
+          .select('id, name')
+          .eq('name', planName)
+          .single();
+
+        if (checkError && checkError.code !== 'PGRST116') {
+          throw new Error(`Erro ao verificar nome do plano: ${checkError.message}`);
+        }
+
+        if (existingPlan) {
+          showSnackbar('Já existe um plano de pagamento com este nome. Por favor, escolha um nome diferente.', 'error');
+          return;
+        }
+      }
+
       const now = new Date().toISOString();
       const startDateFormatted = startDate.format('YYYY-MM-DD');
       const endDate = startDate.clone().add(totalInstallments - 1, 'month').format('YYYY-MM-DD');
@@ -276,7 +340,7 @@ export default function Payments() {
         setEditingPlan(null);
       } else {
         // Criar novo plano
-        const { error: insertError } = await supabase
+        const { data: newPlan, error: insertError } = await supabase
           .from('payment_plans')
           .insert({
             name: planName,
@@ -287,13 +351,16 @@ export default function Payments() {
             end_date: endDate,
             created_at: now,
             updated_at: now
-          });
+          })
+          .select()
+          .single();
 
         if (insertError) {
           throw new Error(`Erro ao criar plano: ${insertError.message}`);
         }
 
-        showSnackbar('Plano de pagamento criado com sucesso', 'success');
+        setSuccessModalMessage('Plano de pagamento criado com sucesso! Agora você pode associá-lo aos alunos na página "Pagamentos dos Alunos".');
+        setSuccessModalOpen(true);
       }
       
       // Atualizar lista de planos
@@ -302,8 +369,8 @@ export default function Payments() {
       // Limpar formulário
       setPlanName('');
       setStartDate(null);
-      setTotalInstallments(1);
-      setInstallmentValue(0);
+      setTotalInstallments('');
+      setInstallmentValue('');
     } catch (error) {
       console.error('Erro durante o salvamento:', error);
       showSnackbar(
@@ -367,7 +434,7 @@ export default function Payments() {
                 label="Valor da Parcela"
                 type="number"
                 value={installmentValue}
-                onChange={(e) => setInstallmentValue(Number(e.target.value))}
+                onChange={(e) => setInstallmentValue(e.target.value === '' ? '' : Number(e.target.value))}
                 inputProps={{ min: 0, step: 0.01 }}
                 fullWidth
                 required
@@ -376,7 +443,7 @@ export default function Payments() {
                 label="Número de Parcelas"
                 type="number"
                 value={totalInstallments}
-                onChange={(e) => setTotalInstallments(Number(e.target.value))}
+                onChange={(e) => setTotalInstallments(e.target.value === '' ? '' : Number(e.target.value))}
                 inputProps={{ min: 1 }}
                 fullWidth
                 required
@@ -510,7 +577,7 @@ export default function Payments() {
                   label="Valor da Parcela"
                   type="number"
                   value={installmentValue}
-                  onChange={(e) => setInstallmentValue(Number(e.target.value))}
+                  onChange={(e) => setInstallmentValue(e.target.value === '' ? '' : Number(e.target.value))}
                   inputProps={{ min: 0, step: 0.01 }}
                   fullWidth
                   required
@@ -519,7 +586,7 @@ export default function Payments() {
                   label="Número de Parcelas"
                   type="number"
                   value={totalInstallments}
-                  onChange={(e) => setTotalInstallments(Number(e.target.value))}
+                  onChange={(e) => setTotalInstallments(e.target.value === '' ? '' : Number(e.target.value))}
                   inputProps={{ min: 1 }}
                   fullWidth
                   required
@@ -547,7 +614,18 @@ export default function Payments() {
           open={snackbarOpen}
           autoHideDuration={6000}
           onClose={() => setSnackbarOpen(false)}
-          anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+          anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+          sx={{
+            '& .MuiSnackbarContent-root': {
+              position: 'fixed',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              zIndex: 9999,
+              minWidth: '400px',
+              maxWidth: '600px'
+            }
+          }}
         >
           <Alert
             onClose={() => setSnackbarOpen(false)}
@@ -563,16 +641,253 @@ export default function Payments() {
           open={deleteDialogOpen}
           onClose={() => setDeleteDialogOpen(false)}
         >
-          <DialogTitle>Confirmar Exclusão</DialogTitle>
+          <DialogTitle>
+            {deleteWarningMessage && deleteWarningMessage.includes('aluno') 
+              ? '🚫 Exclusão Bloqueada' 
+              : 'Confirmar Exclusão'
+            }
+          </DialogTitle>
           <DialogContent>
-            <DialogContentText>
-              Tem certeza que deseja excluir o plano "{planToDelete?.name}"? Esta ação não pode ser desfeita.
-            </DialogContentText>
+            {deleteWarningMessage && deleteWarningMessage.includes('aluno') ? (
+              <>
+                <Alert severity="error" sx={{ mb: 2 }}>
+                  <Typography variant="body1" sx={{ fontWeight: 'bold', mb: 1 }}>
+                    ❌ Não é possível excluir este plano de pagamento
+                  </Typography>
+                  <Typography variant="body2">
+                    {deleteWarningMessage}
+                  </Typography>
+                </Alert>
+                <Box sx={{ mt: 2, p: 2, bgcolor: 'warning.light', borderRadius: 1 }}>
+                  <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
+                    📋 <strong>Para excluir este plano, siga estes passos:</strong>
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 1 }}>
+                    1. Vá para a página "Pagamentos dos Alunos"
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 1 }}>
+                    2. Filtre pelos alunos que possuem este plano
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 2 }}>
+                    3. Remova o plano de todos os alunos associados
+                  </Typography>
+                  <Button
+                    variant="contained"
+                    size="small"
+                    startIcon={<LaunchIcon />}
+                    onClick={() => {
+                      setDeleteDialogOpen(false);
+                      navigate('/dashboard/student-payments');
+                    }}
+                    sx={{ mt: 1 }}
+                  >
+                    Ir para Pagamentos dos Alunos
+                  </Button>
+                </Box>
+              </>
+            ) : deleteWarningMessage ? (
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                {deleteWarningMessage}
+              </Alert>
+            ) : (
+              <DialogContentText>
+                Tem certeza que deseja excluir o plano "{planToDelete?.name}"? Esta ação não pode ser desfeita.
+              </DialogContentText>
+            )}
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setDeleteDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={confirmDelete} color="error" autoFocus>
-              Excluir
+            {!(deleteWarningMessage && deleteWarningMessage.includes('aluno')) && !deletionBlocked && (
+              <Button 
+                onClick={confirmDelete} 
+                color="error" 
+                autoFocus
+              >
+                Excluir
+              </Button>
+            )}
+          </DialogActions>
+        </Dialog>
+
+        {/* Modal dedicado para avisos de planos com alunos associados */}
+        <Dialog
+          open={warningModalOpen}
+          onClose={() => setWarningModalOpen(false)}
+          maxWidth="md"
+          fullWidth
+          sx={{
+            '& .MuiDialog-paper': {
+              margin: { xs: 1, sm: 2 },
+              maxHeight: { xs: '95vh', sm: '90vh' }
+            }
+          }}
+        >
+          <DialogTitle sx={{ 
+            bgcolor: 'error.main', 
+            color: 'white',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
+            py: { xs: 1.5, sm: 2 },
+            fontSize: { xs: '1rem', sm: '1.25rem' }
+          }}>
+            🚫 Exclusão Bloqueada - Plano com Alunos
+          </DialogTitle>
+          <DialogContent sx={{ mt: { xs: 1, sm: 2 }, px: { xs: 2, sm: 3 } }}>
+            <Alert severity="error" sx={{ mb: { xs: 2, sm: 3 } }}>
+              <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 0.5, fontSize: { xs: '0.875rem', sm: '1rem' } }}>
+                ❌ Não é possível excluir este plano
+              </Typography>
+              <Typography variant="body2" sx={{ fontSize: { xs: '0.8rem', sm: '0.875rem' } }}>
+                {warningModalMessage}
+              </Typography>
+            </Alert>
+            
+            <Box sx={{ 
+              mt: { xs: 2, sm: 3 }, 
+              p: { xs: 2, sm: 3 }, 
+              bgcolor: 'warning.light', 
+              borderRadius: 2,
+              border: '2px solid',
+              borderColor: 'warning.main'
+            }}>
+              <Typography variant="h6" sx={{ 
+                mb: { xs: 1.5, sm: 2 }, 
+                fontWeight: 'bold', 
+                color: 'warning.dark',
+                fontSize: { xs: '1rem', sm: '1.25rem' }
+              }}>
+                📋 Como proceder:
+              </Typography>
+              
+              <Box sx={{ mb: { xs: 1, sm: 2 } }}>
+                <Typography variant="body2" sx={{ 
+                  mb: 0.5, 
+                  fontWeight: 'bold',
+                  fontSize: { xs: '0.875rem', sm: '1rem' }
+                }}>
+                  1️⃣ Acesse "Pagamentos dos Alunos"
+                </Typography>
+                <Typography variant="body2" sx={{ 
+                  ml: { xs: 2, sm: 3 }, 
+                  color: 'text.secondary',
+                  fontSize: { xs: '0.75rem', sm: '0.875rem' }
+                }}>
+                  Gerencie os pagamentos individuais
+                </Typography>
+              </Box>
+              
+              <Box sx={{ mb: { xs: 1, sm: 2 } }}>
+                <Typography variant="body2" sx={{ 
+                  mb: 0.5, 
+                  fontWeight: 'bold',
+                  fontSize: { xs: '0.875rem', sm: '1rem' }
+                }}>
+                  2️⃣ Associe o plano aos alunos
+                </Typography>
+                <Typography variant="body2" sx={{ 
+                  ml: { xs: 2, sm: 3 }, 
+                  color: 'text.secondary',
+                  fontSize: { xs: '0.75rem', sm: '0.875rem' }
+                }}>
+                  Selecione o plano para cada aluno e clique em "Salvar"
+                </Typography>
+              </Box>
+              
+              <Box sx={{ mb: { xs: 2, sm: 3 } }}>
+                <Typography variant="body2" sx={{ 
+                  mb: 0.5, 
+                  fontWeight: 'bold',
+                  fontSize: { xs: '0.875rem', sm: '1rem' }
+                }}>
+                  3️⃣ Remova associações se necessário
+                </Typography>
+                <Typography variant="body2" sx={{ 
+                  ml: { xs: 2, sm: 3 }, 
+                  color: 'text.secondary',
+                  fontSize: { xs: '0.75rem', sm: '0.875rem' }
+                }}>
+                  Desassocie alunos antes de excluir o plano
+                </Typography>
+              </Box>
+              
+              <Box sx={{ 
+                display: 'flex', 
+                justifyContent: 'center',
+                pt: { xs: 1, sm: 2 },
+                borderTop: '1px solid',
+                borderColor: 'warning.main'
+              }}>
+                <Button
+                  variant="contained"
+                  size={window.innerWidth < 600 ? "medium" : "large"}
+                  startIcon={<LaunchIcon />}
+                  onClick={() => {
+                    setWarningModalOpen(false);
+                    navigate('/dashboard/student-payments');
+                  }}
+                  sx={{ 
+                    bgcolor: 'primary.main',
+                    fontSize: { xs: '0.875rem', sm: '1rem' },
+                    px: { xs: 2, sm: 3 },
+                    '&:hover': {
+                      bgcolor: 'primary.dark'
+                    }
+                  }}
+                >
+                  Ir para Pagamentos
+                </Button>
+              </Box>
+            </Box>
+          </DialogContent>
+          <DialogActions sx={{ p: { xs: 2, sm: 3 }, pt: { xs: 1, sm: 2 } }}>
+            <Button 
+              onClick={() => setWarningModalOpen(false)}
+              variant="outlined"
+              size={window.innerWidth < 600 ? "medium" : "large"}
+              sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}
+            >
+              Entendi, Fechar
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Modal de Sucesso */}
+        <Dialog
+          open={successModalOpen}
+          onClose={() => setSuccessModalOpen(false)}
+          maxWidth="sm"
+          fullWidth
+        >
+          <DialogTitle sx={{ 
+            textAlign: 'center', 
+            color: 'success.main',
+            fontSize: '1.5rem',
+            fontWeight: 'bold'
+          }}>
+            ✅ Sucesso!
+          </DialogTitle>
+          <DialogContent>
+            <DialogContentText sx={{ 
+              textAlign: 'center', 
+              fontSize: '1.1rem',
+              color: 'text.primary'
+            }}>
+              {successModalMessage}
+            </DialogContentText>
+          </DialogContent>
+          <DialogActions sx={{ justifyContent: 'center', pb: 3 }}>
+            <Button 
+              onClick={() => setSuccessModalOpen(false)}
+              variant="contained"
+              color="success"
+              size="large"
+              sx={{ 
+                minWidth: 120,
+                fontSize: '1rem'
+              }}
+            >
+              OK
             </Button>
           </DialogActions>
         </Dialog>
