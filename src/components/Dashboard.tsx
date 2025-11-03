@@ -23,6 +23,7 @@ import {
   Menu as MenuIcon,
   LogOut,
   Home,
+  HelpCircle,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import Groups from '../pages/Groups';
@@ -31,6 +32,7 @@ import { Students } from '../pages/Students';
 import Payments from '../pages/Payments';
 import StudentPayments from '../pages/StudentPayments';
 import { Reports } from '../pages/Reports';
+import ManualDeUso from '../pages/ManualDeUso';
 
 const drawerWidth = 280;
 
@@ -99,6 +101,11 @@ export function Dashboard() {
           },
         ]
       : []),
+    {
+      text: 'Manual de Uso',
+      icon: <HelpCircle size={24} />,
+      path: '/dashboard/manual',
+    },
   ];
 
   const drawer = (
@@ -285,6 +292,7 @@ export function Dashboard() {
               <Route path="students" element={<Students />} />
               <Route path="payments" element={<Payments />} />
               <Route path="student-payments" element={<StudentPayments />} />
+              <Route path="manual" element={<ManualDeUso />} />
               {isAdmin && <Route path="reports" element={<Reports />} />}
         </Routes>
       </Box>
